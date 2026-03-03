@@ -81,10 +81,7 @@
     const [loading, setLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState(null);
-    const [activeStatus, setActiveStatus] = useState(() => {
-      const saved = localStorage.getItem('vaptsecure_workbench_active_status');
-      return saved ? saved : 'Develop';
-    });
+    const [activeStatus, setActiveStatus] = useState('Release');
     const [activeCategory, setActiveCategory] = useState('all');
     const [activeFeatureKey, setActiveFeatureKey] = useState(() => {
       const saved = localStorage.getItem('vaptsecure_workbench_active_feature');
@@ -128,9 +125,9 @@
       if (refresh) setIsRefreshing(true);
       else setLoading(true);
 
+      // Client dashboard always fetches only domain-released features
       const domain = settings.currentDomain || window.location.hostname;
-      const isWorkbench = new URLSearchParams(window.location.search).get('page') === 'vaptsecure-workbench';
-      const path = isWorkbench ? 'vaptsecure/v1/features' : `vaptsecure/v1/features?scope=client&domain=${domain}`;
+      const path = `vaptsecure/v1/features?scope=client&domain=${encodeURIComponent(domain)}`;
       apiFetch({ path })
         .then(data => {
           // Dedup features by key to prevent list inflation
@@ -176,22 +173,16 @@
         });
     };
 
-    const availableStatuses = useMemo(() => isSuper ? ['All', 'Develop', 'Release'] : ['All', 'Develop', 'Release'], [isSuper]);
+    // Client dashboard is Release-only
+    const availableStatuses = ['Release'];
 
+    // Client dashboard: only show Release features enabled for this domain
     const statusFeatures = useMemo(() => {
       return features.filter(f => {
         const s = f.normalized_status || (f.status ? f.status.toLowerCase() : '');
-        const active = activeStatus.toLowerCase();
-
-        if (active === 'all') {
-          return ['develop', 'release', 'in_progress', 'implemented'].includes(s);
-        }
-
-        if (active === 'develop') return ['develop', 'in_progress'].includes(s);
-        if (active === 'release') return ['release', 'implemented'].includes(s);
-        return s === active;
+        return ['release', 'implemented'].includes(s);
       });
-    }, [features, activeStatus]);
+    }, [features]);
 
     const categories = useMemo(() => {
       const cats = [...new Set(statusFeatures.map(f => f.category || 'Uncategorized'))].sort();

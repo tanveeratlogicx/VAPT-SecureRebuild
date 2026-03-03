@@ -16,6 +16,9 @@
       const riskId = feature.id || feature.risk_id || 'vapt-risk-' + Math.random().toString(36).substr(2, 9);
       const title = feature.label || feature.title || feature.name || 'Untitled Protection';
 
+      const includeProtocol = feature.include_manual_protocol !== false && feature.include_manual_protocol !== 0 && feature.include_manual_protocol !== '0';
+      const includeNotes = feature.include_operational_notes !== false && feature.include_operational_notes !== 0 && feature.include_operational_notes !== '0';
+
       const schema = {
         metadata: {
           name: "VAPT Client-Ready Multi-Environment Generator",
@@ -104,6 +107,14 @@
             }
           }
         ],
+        ...(includeProtocol ? {
+          manual_protocol: {
+            steps: Array.isArray(feature.verification_steps) ? feature.verification_steps : (feature.verification_steps ? [feature.verification_steps] : ["Manual verification steps not provided."])
+          }
+        } : {}),
+        ...(includeNotes ? {
+          operational_notes: feature.operational_notes || "Specific operational notes are currently unavailable."
+        } : {}),
         controls: [
           { type: 'header', label: 'Implementation Control' },
           { type: 'toggle', label: 'Enable Protection', key: 'feat_enabled', default: true },
