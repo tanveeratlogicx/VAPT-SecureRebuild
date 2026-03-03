@@ -459,6 +459,7 @@ window.vaptScriptLoaded = true;
         status: 'Draft',
         generated_schema: null,
         implementation_data: null,
+        is_enforced: 0,          // v1.9.5: clear enforcement state on schema removal
         include_verification_engine: 0,
         include_verification_guidance: 0,
         reset_history: true,
@@ -1135,17 +1136,34 @@ window.vaptScriptLoaded = true;
           (() => {
             const isAPlus = (parsedSchema?.metadata?.schema_grade === 'A+' || parsedSchema?.schema_grade === 'A+');
             return el('div', { id: 'vapt-design-modal-toggles', className: 'vapt-flex-col' }, [
-              el('div', { className: 'vapt-flex-row', style: { gap: '20px' } }, [
-                el(ToggleControl, {
-                  label: __('Include Manual Verification Protocol', 'vaptsecure'),
-                  checked: includeProtocol,
-                  onChange: setIncludeProtocol
-                }),
-                el(ToggleControl, {
-                  label: __('Include Operational Notes Section', 'vaptsecure'),
-                  checked: includeNotes,
-                  onChange: setIncludeNotes
-                })
+              el('div', { className: 'vapt-flex-row', style: { width: '100%', gap: '20px', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0px' } }, [
+                el('div', { className: 'vapt-flex-col' }, [
+                  el(ToggleControl, {
+                    label: __('Add Operational Notes', 'vaptsecure'),
+                    checked: includeNotes,
+                    onChange: setIncludeNotes
+                  }),
+                  el(ToggleControl, {
+                    label: __('Add Manual Verification Notes', 'vaptsecure'),
+                    checked: includeProtocol,
+                    onChange: setIncludeProtocol
+                  })
+                ]),
+                el('div', { style: { paddingTop: '2px' } }, [
+                  el(Button, {
+                    isSecondary: true,
+                    icon: 'update',
+                    onClick: () => {
+                      if (window.VAPTSECURE_APlusGenerator) {
+                        const tempFeature = { ...feature, include_manual_protocol: includeProtocol, include_operational_notes: includeNotes };
+                        const updatedSchema = window.VAPTSECURE_APlusGenerator.generate(tempFeature, customizationText);
+                        onJsonChange(JSON.stringify(updatedSchema, null, 2));
+                        setSaveStatus({ message: __('Schema Updated!', 'vaptsecure'), type: 'success' });
+                        setTimeout(() => setSaveStatus(null), 2000);
+                      }
+                    }
+                  }, __('Update Schema', 'vaptsecure'))
+                ])
               ]),
               !isAPlus && el('div', { className: 'vapt-flex-row', style: { gap: '20px' } }, [
                 el(ToggleControl, {
@@ -4684,7 +4702,22 @@ window.vaptScriptLoaded = true;
                     el(Button, {
                       className: 'vapt-aplus-workbench-btn',
                       style: {
-                        background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
+                        background: (() => {
+                          // v1.9.5: 3-tier color matrix
+                          // Orange → Release/implemented (approved for client)
+                          // Green  → schema present AND enforced (actively deployed)
+                          // Blue   → no schema or not enforced (pending implementation)
+                          const isRelease = ['release', 'Release', 'implemented'].includes(f.status);
+                          const hasSchema = f.generated_schema &&
+                            f.generated_schema !== 'null' &&
+                            f.generated_schema !== '{}' &&
+                            f.generated_schema !== '[]' &&
+                            (Array.isArray(f.generated_schema) ? f.generated_schema.length > 0 : Object.keys(f.generated_schema).length > 0);
+                          const isEnforced = (f.is_enforced == 1) && hasSchema;
+                          if (isRelease) return 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)'; // Orange
+                          if (isEnforced) return 'linear-gradient(135deg, #10b981 0%, #059669 100%)'; // Green
+                          return 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)';                 // Blue
+                        })(),
                         color: '#fff',
                         border: 'none',
                         fontWeight: '600',

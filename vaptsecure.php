@@ -3,7 +3,7 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           1.9.1
+ * Version:           1.9.6
  * Author:            VAPT Team
  * Author URI:        https://vaptsecure.com/
  * License:           GPL-2.0+
@@ -25,7 +25,7 @@ if (! defined('ABSPATH')) {
  * The current version of the plugin.
  */
 if (! defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '1.9.1');
+  define('VAPTSECURE_VERSION', '1.9.6');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
@@ -342,12 +342,12 @@ if (! function_exists('vaptsecure_manual_db_fix')) {
       if (empty($col_enforced)) {
         $wpdb->query("ALTER TABLE {$table_meta} ADD COLUMN is_enforced TINYINT(1) DEFAULT 1");
         // Migration: Enable by default for existing records
-        $wpdb->query("UPDATE {$table_meta} SET is_enforced = 1 WHERE is_enforced IS NULL OR is_enforced = 0");
+        // $wpdb->query("UPDATE {$table_meta} SET is_enforced = 1 WHERE is_enforced IS NULL OR is_enforced = 0");
       } else {
         // Migration: Update default for existing column
         $wpdb->query("ALTER TABLE {$table_meta} ALTER COLUMN is_enforced SET DEFAULT 1");
         // Migration: Force enable '0' or NULL values based on user request ("Protection should work out of the box")
-        $wpdb->query("UPDATE {$table_meta} SET is_enforced = 1 WHERE is_enforced IS NULL OR is_enforced = 0");
+        // $wpdb->query("UPDATE {$table_meta} SET is_enforced = 1 WHERE is_enforced IS NULL OR is_enforced = 0");
       }
       // 5. Force add assigned_to column
       $col_assigned = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$status_table} LIKE %s", 'assigned_to'));
@@ -495,7 +495,7 @@ if (! function_exists('vaptsecure_add_admin_menu')) {
         __('VAPTSecure Workbench', 'vaptsecure'),
         'manage_options',
         'vaptsecure-workbench',
-        'vaptsecure_render_client_status_page'
+        'vaptsecure_render_workbench_page'
       );
       // Sub-menu 2: Domain Admin
       add_submenu_page(
@@ -556,8 +556,26 @@ if (! function_exists('vaptsecure_render_client_status_page')) {
 }
 
 /**
- * Render Main Admin Page
+ * Render Superadmin Workbench Page
  */
+if (! function_exists('vaptsecure_render_workbench_page')) {
+  function vaptsecure_render_workbench_page()
+  {
+  ?>
+    <div class="wrap">
+      <h1 class="wp-heading-inline"><?php _e('VAPT Secure Workbench', 'vaptsecure'); ?></h1>
+      <hr class="wp-header-end" />
+      <div id="vapt-workbench-root">
+        <div style="padding: 40px; text-align: center; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-radius: 4px;">
+          <span class="spinner is-active" style="float: none; margin: 0 auto;"></span>
+          <p><?php _e('Loading Superadmin Workbench...', 'vaptsecure'); ?></p>
+        </div>
+      </div>
+    </div>
+  <?php
+  }
+}
+
 if (! function_exists('vaptsecure_render_admin_page')) {
   function vaptsecure_render_admin_page()
   {
@@ -717,9 +735,8 @@ function vaptsecure_enqueue_admin_assets($hook)
       'pluginName' => 'VAPT Secure'
     ));
   }
-  // 2. Client Dashboard (client.js) - "VAPT Secure" page
+  // 2. Shared: Generated Interface UI Component
   if ($screen->id === 'toplevel_page_vaptsecure' || strpos($screen->id, 'vaptsecure-workbench') !== false) {
-    // Enqueue Generated Interface UI Component (Shared)
     wp_enqueue_script(
       'vapt-generated-interface-ui',
       plugin_dir_url(__FILE__) . 'assets/js/modules/generated-interface.js',
@@ -727,7 +744,10 @@ function vaptsecure_enqueue_admin_assets($hook)
       VAPTSECURE_VERSION,
       true
     );
-    // Enqueue Client Dashboard Script
+  }
+
+  // 2a. Client Dashboard (client.js) - WordPress Admin view - "VAPT Secure" page (Release features only)
+  if ($screen->id === 'toplevel_page_vaptsecure') {
     wp_enqueue_script(
       'vapt-client-js',
       plugin_dir_url(__FILE__) . 'assets/js/client.js',
@@ -736,12 +756,33 @@ function vaptsecure_enqueue_admin_assets($hook)
       true
     );
     wp_localize_script('vapt-client-js', 'vaptSecureSettings', array(
-      'root' => esc_url_raw(rest_url()),
-      'homeUrl' => esc_url_raw(home_url()),
-      'nonce' => wp_create_nonce('wp_rest'),
-      'isSuper' => $is_superadmin,
+      'root'          => esc_url_raw(rest_url()),
+      'homeUrl'       => esc_url_raw(home_url()),
+      'nonce'         => wp_create_nonce('wp_rest'),
+      'isSuper'       => $is_superadmin,
+      'currentDomain' => parse_url(home_url(), PHP_URL_HOST),
       'pluginVersion' => VAPTSECURE_VERSION,
-      'pluginName' => 'VAPT Secure'
+      'pluginName'    => 'VAPT Secure'
+    ));
+  }
+
+  // 2b. Superadmin Workbench (workbench.js) - "VAPT Secure Workbench" page (All features, unscoped)
+  if (strpos($screen->id, 'vaptsecure-workbench') !== false) {
+    wp_enqueue_script(
+      'vapt-workbench-js',
+      plugin_dir_url(__FILE__) . 'assets/js/workbench.js',
+      array('wp-element', 'wp-components', 'wp-i18n', 'vapt-generated-interface-ui'),
+      VAPTSECURE_VERSION,
+      true
+    );
+    wp_localize_script('vapt-workbench-js', 'vaptSecureSettings', array(
+      'root'          => esc_url_raw(rest_url()),
+      'homeUrl'       => esc_url_raw(home_url()),
+      'nonce'         => wp_create_nonce('wp_rest'),
+      'isSuper'       => $is_superadmin,
+      'currentDomain' => parse_url(home_url(), PHP_URL_HOST),
+      'pluginVersion' => VAPTSECURE_VERSION,
+      'pluginName'    => 'VAPT Secure'
     ));
   }
 }
