@@ -1,0 +1,517 @@
+# =============================================================================
+# GOOGLE ANTIGRAVITY IDE RULE SET
+# VAPT Client-Ready Multi-Environment Schema Generator v3.2.0
+# 
+# PURPOSE: Generate Interface Schemas that auto-adapt to ANY client environment
+# at runtime without manual reconfiguration.
+#
+# KEY FEATURES:
+# - Runtime environment detection (not build-time)
+# - Capability-based platform selection (not hardcoded)
+# - Graceful degradation across all protection levels
+# - Single schema deploys everywhere
+# =============================================================================
+
+metadata:
+  name: "VAPT Client-Ready Multi-Environment Generator"
+  version: "3.2.0"
+  purpose: "Client deployment - any environment"
+  target_grade: "A+"
+  
+  trigger:
+    file_pattern: "interface_schema_v*.json"
+    status_transition: ["DRAFT → DEVELOP", "DRAFT → PRODUCTION"]
+    
+  output:
+    filename_template: "interface_schema_v3.2_{{timestamp}}_CLIENT_READY.json"
+
+# =============================================================================
+# PHASE 1: CLIENT ENVIRONMENT ANALYSIS
+# =============================================================================
+
+rules:
+
+  - id: analyze_client_needs
+    name: "Analyze Client Environment Requirements"
+    action: analyze
+    analyze:
+      source: "{{trigger.file}}"
+      extract:
+        risk_count: "count($.risk_interfaces)"
+        unique_platforms: "unique($.risk_interfaces.*.available_platforms[])"
+        
+    # Build client capability profile
+    output:
+      client_profile:
+        environment_types: ["shared_hosting", "vps", "dedicated", "cloud", "enterprise"]
+        server_software: ["apache", "nginx", "litespeed", "iis", "unknown"]
+        access_levels: ["full_root", "sudo", "cpanel", "ftp_only", "wordpress_only"]
+        edge_proxy: ["none", "cloudflare", "sucuri", "aws_cloudfront", "unknown"]
+
+# =============================================================================
+# PHASE 2: RUNTIME ENVIRONMENT DETECTION ENGINE
+# =============================================================================
+
+  - id: build_runtime_detector
+    name: "Build Runtime Environment Detection Engine"
+    action: inject
+    target: "$.global_config"
+    
+    payload:
+      runtime_environment_detection:
+        version: "3.2.0"
+        execution_phase: "plugin_init"  # When detection runs
+        cache_duration_minutes: 60      # Cache detection results
+        
+        # Detection cascade - tries in order until success
+        detection_cascade:
+          - name: "server_software_header"
+            priority: 1
+            method: "inspect_server_variable"
+            variable: "SERVER_SOFTWARE"
+            confidence: "high"
+            timeout_ms: 100
+            
+          - name: "php_sapi_detection"
+            priority: 2
+            method: "php_function"
+            function: "php_sapi_name"
+            confidence: "medium"
+            
+          - name: "filesystem_probe"
+            priority: 3
+            method: "file_exists"
+            probes:
+              apache: ["/etc/apache2/apache2.conf", "/etc/httpd/conf/httpd.conf", ".htaccess"]
+              nginx: ["/etc/nginx/nginx.conf", "/usr/local/nginx/conf/nginx.conf"]
+              litespeed: ["/usr/local/lsws/conf/httpd_config.conf"]
+              iis: ["C:\\Windows\\System32\\inetsrv\\config\\applicationHost.config"]
+            confidence: "high"
+            
+          - name: "function_availability"
+            priority: 4
+            method: "function_exists"
+            tests:
+              apache: ["apache_get_modules", "apache_get_version"]
+              nginx: []  # No PHP functions for Nginx
+            confidence: "medium"
+            
+          - name: "hosting_provider_detection"
+            priority: 5
+            method: "pattern_matching"
+            indicators:
+              wp_engine: "WPE_API_KEY"
+              siteground: "SITEGROUND_ENV"
+              bluehost: "BLUEHOST_HOST"
+              cloudways: "CW_APP_ID"
+            confidence: "low"
+        
+        # Environment capability matrix
+        capability_matrix:
+          apache_with_htaccess:
+            detected_by: ["server_software_header:Apache", "filesystem_probe:apache"]
+            capabilities:
+              rewrite_rules: true
+              header_injection: true
+              file_blocking: true
+              performance: "excellent"
+            requirements:
+              mod_rewrite: "optional_but_preferred"
+              allowoverride: "FileInfo"
+              
+          nginx_with_config:
+            detected_by: ["server_software_header:nginx", "filesystem_probe:nginx"]
+            capabilities:
+              rewrite_rules: true
+              header_injection: true
+              file_blocking: true
+              performance: "excellent"
+            requirements:
+              config_access: "server_or_vhost"
+              reload_capability: "required_for_activation"
+              
+          litespeed:
+            detected_by: ["server_software_header:LiteSpeed"]
+            capabilities:
+              rewrite_rules: true
+              header_injection: true
+              file_blocking: true
+              performance: "excellent"
+            requirements:
+              htaccess_compatible: true  # LiteSpeed reads .htaccess
+              
+          limited_php_only:
+            detected_by: ["default_fallback"]
+            capabilities:
+              wordpress_hooks: true
+              runtime_blocking: true
+              file_blocking: false  # Cannot block static files
+              performance: "good"
+            requirements:
+              php_version: ">=7.4"
+              wordpress_hooks: "init,rest_api_init,plugins_loaded"
+              
+          cloudflare_edge:
+            detected_by: ["http_header:CF-RAY", "hosting_provider_detection"]
+            capabilities:
+              edge_blocking: true
+              ddos_protection: true
+              zero_origin_load: true
+              performance: "optimal"
+            requirements:
+              cloudflare_proxy: "orange_cloud"
+              api_access: "optional_for_deployment"
+
+# =============================================================================
+# PHASE 3: DYNAMIC PLATFORM SELECTION LOGIC
+# =============================================================================
+
+  - id: build_platform_selector
+    name: "Build Dynamic Platform Selector"
+    for_each: "$.risk_interfaces.*"
+    action: inject
+    
+    payload:
+      runtime_platform_selection:
+        # This section tells the VAPT Driver how to choose at runtime
+        selection_logic:
+          strategy: "maximize_protection_capability"
+          
+          decision_tree:
+            # Step 1: Check for edge proxy (best performance)
+            - if: "environment.cloudflare_edge.available AND environment.cloudflare_edge.configured"
+              then:
+                select: "cloudflare_edge"
+                reason: "Edge blocking with zero origin load"
+                
+            # Step 2: Check for server-level access
+            - if: "environment.apache_with_htaccess.available AND environment.apache_with_htaccess.writable"
+              then:
+                select: "apache_htaccess"
+                reason: "Server-level blocking with .htaccess"
+                
+            - if: "environment.nginx_with_config.available AND environment.nginx_with_config.config_writable"
+              then:
+                select: "nginx_config"
+                reason: "Server-level blocking with Nginx config"
+                
+            - if: "environment.litespeed.available"
+              then:
+                select: "litespeed_htaccess"
+                reason: "LiteSpeed compatible with .htaccess rules"
+                
+            # Step 3: Universal fallback (always works)
+            else:
+              select: "php_functions"
+              reason: "Application-level blocking via WordPress hooks"
+              
+        # Capability comparison for manual override
+        capability_comparison:
+          blocking_effectiveness:
+            cloudflare_edge: 10      # Blocks before reaching origin
+            nginx_config: 9          # Blocks at web server
+            apache_htaccess: 9       # Blocks at web server
+            litespeed: 9             # Blocks at web server
+            php_functions: 6         # Blocks in application
+            
+          performance_impact:
+            cloudflare_edge: 10      # Zero origin impact
+            nginx_config: 9          # Minimal
+            apache_htaccess: 8       # Minimal
+            litespeed: 8             # Minimal
+            php_functions: 6         # PHP execution required
+            
+          ease_of_deployment:
+            cloudflare_edge: 7       # Requires API access
+            nginx_config: 5          # Requires server access
+            apache_htaccess: 8       # File write only
+            litespeed: 8             # File write only
+            php_functions: 10        # WordPress plugin
+
+# =============================================================================
+# PHASE 4: UNIVERSAL PROTECTION DEFINITIONS
+# =============================================================================
+
+  - id: define_universal_protection
+    name: "Define Universal Protection (All Environments)"
+    for_each: "$.risk_interfaces.*"
+    action: transform
+    
+    transform:
+      # Keep original identification
+      risk_id: "{{item.risk_id}}"
+      title: "{{item.title}}"
+      category: "{{item.category}}"
+      severity: "{{item.severity}}"
+      
+      # NEW: Universal protection definition
+      protection_definition:
+        # What we're protecting against (environment-agnostic)
+        threat:
+          name: "{{item.title}}"
+          vector: "{{item.summary}}"
+          cwe: "{{item.owasp.cwe}}"
+          
+        # What blocking looks like (success criteria)
+        blocking_behavior:
+          trigger_condition: "{{define_trigger(item.risk_id)}}"
+          action: "block_with_403"
+          response_headers:
+            X-VAPT-Protection: "active"
+            X-VAPT-Risk-ID: "{{item.risk_id}}"
+            
+        # Platform-specific implementations (all of them)
+        implementations:
+        
+          # 1. Cloudflare Edge (if available)
+          cloudflare_edge:
+            applicable: "{{is_cloudflare_applicable(item.risk_id)}}"
+            provider: "cloudflare"
+            rule_type: "custom_rule"
+            expression: "{{generate_cloudflare_expression(item.risk_id)}}"
+            action: "block"
+            priority: 100
+            
+          # 2. Apache .htaccess
+          apache_htaccess:
+            applicable: true
+            config_format: "apache_rewrite"
+            rules: "{{generate_apache_rules(item.risk_id)}}"
+            insertion_point: "before_wordpress"
+            required_modules: ["mod_rewrite"]
+            
+          # 3. Nginx Config
+          nginx_config:
+            applicable: true
+            config_format: "nginx_rewrite"
+            rules: "{{generate_nginx_rules(item.risk_id)}}"
+            context: "server"
+            test_command: "nginx -t"
+            
+          # 4. LiteSpeed (uses .htaccess)
+          litespeed:
+            applicable: true
+            config_format: "apache_rewrite"  # Compatible
+            rules: "{{generate_apache_rules(item.risk_id)}}"  # Same as Apache
+            notes: "LiteSpeed parses .htaccess natively"
+            
+          # 5. IIS web.config
+          iis_config:
+            applicable: true
+            config_format: "iis_rewrite"
+            rules: "{{generate_iis_rules(item.risk_id)}}"
+            file: "web.config"
+            
+          # 6. Caddy
+          caddy_config:
+            applicable: true
+            config_format: "caddyfile"
+            rules: "{{generate_caddy_rules(item.risk_id)}}"
+            matcher: "@vapt{{item.risk_id}}"
+            
+          # 7. PHP Functions (UNIVERSAL FALLBACK)
+          php_functions:
+            applicable: true  # Always applicable
+            universal: true   # This is the fallback of last resort
+            
+            implementation:
+              type: "wordpress_plugin"
+              method: "hook"
+              
+              # Multiple hook strategies for defense in depth
+              hooks:
+                - name: "init"
+                  priority: 1
+                  condition: "is_author_query_present"
+                  action: "block_request"
+                  
+                - name: "rest_api_init"
+                  priority: 10
+                  condition: "is_users_endpoint_unauthenticated"
+                  action: "disable_endpoint"
+                  
+                - name: "parse_query"
+                  priority: 1
+                  condition: "is_author_archive_query"
+                  action: "redirect_404"
+                  
+              # PHP-specific limitations (documented)
+              limitations:
+                - "Cannot block requests before WordPress loads"
+                - "Static file requests bypass PHP"
+                - "Slightly higher latency than server-level"
+                
+              # Mitigations for limitations
+              mitigations:
+                - "Combine with object cache for minimal impact"
+                - "Use in conjunction with permalinks structure"
+                - "Monitor via application logs"
+
+# =============================================================================
+# PHASE 5: CLIENT DEPLOYMENT CONFIGURATION
+# =============================================================================
+
+  - id: client_deployment_config
+    name: "Generate Client Deployment Configuration"
+    action: inject
+    target: "$"
+    
+    payload:
+      client_deployment:
+        # One-click deployment profiles
+        profiles:
+          # Profile: Auto-Detect (Recommended)
+          auto_detect:
+            name: "Automatic Environment Detection"
+            description: "Detects environment and applies best available protection"
+            steps:
+              - detect_environment
+              - test_capabilities
+              - select_optimal_platform
+              - deploy_protection
+              - verify_blocking
+            fallback: "php_functions"
+            
+          # Profile: Maximum Protection
+          maximum_protection:
+            name: "Maximum Protection (All Layers)"
+            description: "Deploys protection at all available layers"
+            steps:
+              - deploy_cloudflare_if_available
+              - deploy_server_config
+              - deploy_php_fallback
+            strategy: "defense_in_depth"
+            
+          # Profile: Conservative (Shared Hosting)
+          conservative:
+            name: "Conservative (Shared Hosting Safe)"
+            description: "Only uses methods safe for shared hosting"
+            allowed_platforms: ["php_functions", "apache_htaccess"]
+            prohibited: ["nginx_config", "server_restart_required"]
+            
+          # Profile: Enterprise
+          enterprise:
+            name: "Enterprise Multi-Layer"
+            description: "Coordinated deployment across load balancers"
+            steps:
+              - deploy_edge_protection
+              - deploy_origin_protection
+              - configure_health_checks
+              - setup_monitoring
+              
+        # Client communication
+        client_messaging:
+          pre_deployment:
+            title: "Environment Scan"
+            message: "Scanning your server environment to determine optimal protection..."
+            
+          during_deployment:
+            title: "Deploying Protection"
+            message: "Installing {{risk_count}} security protections..."
+            
+          post_deployment:
+            title: "Protection Active"
+            message: "{{active_platforms}} protection layers active. Testing complete."
+            
+          fallback_notice:
+            title: "Using Universal Protection"
+            message: "Your hosting environment requires PHP-based protection. All features active."
+
+# =============================================================================
+# PHASE 6: VERIFICATION & TESTING (Client-Facing)
+# =============================================================================
+
+  - id: client_verification_suite
+    name: "Build Client Verification Suite"
+    for_each: "$.risk_interfaces.*"
+    action: inject
+    
+    payload:
+      client_verification:
+        # Simple pass/fail tests clients can understand
+        tests:
+          - name: "Protection Active"
+            description: "Verify protection is blocking threats"
+            type: "http_probe"
+            url: "{{test_url}}"
+            expect: "403 Forbidden"
+            user_friendly_result:
+              pass: "✓ Protection is working"
+              fail: "✗ Protection not detected"
+              
+          - name: "Legitimate Access"
+            description: "Verify normal website use still works"
+            type: "http_probe"
+            url: "{{site_homepage}}"
+            expect: "200 OK"
+            user_friendly_result:
+              pass: "✓ Website accessible"
+              fail: "✗ Website unreachable"
+              
+          - name: "Performance Check"
+            description: "Verify protection doesn't slow site"
+            type: "timing_comparison"
+            threshold_ms: 100
+            user_friendly_result:
+              pass: "✓ No performance impact"
+              warn: "⚠ Slight delay detected"
+              
+        # Visual dashboard data
+        dashboard:
+          status_indicator:
+            type: "shield"
+            states:
+              green: "All protections active"
+              yellow: "Protection active with fallback"
+              red: "Protection issues detected"
+              
+          metrics:
+            - label: "Active Protections"
+              value: "{{count_active_risks}}"
+            - label: "Protection Level"
+              value: "{{current_platform_tier}}"
+            - label: "Last Tested"
+              value: "{{last_verification_time}}"
+
+# =============================================================================
+# PHASE 7: FINAL VALIDATION
+# =============================================================================
+
+  - id: validate_client_ready
+    name: "Validate Client-Ready Schema"
+    action: validate
+    
+    params:
+      checks:
+        # Must have runtime detection
+        - "$.global_config.runtime_environment_detection exists"
+        - "$.global_config.runtime_environment_detection.detection_cascade length >= 3"
+        
+        # Must have platform selection logic
+        - "$.global_config.runtime_platform_selection exists"
+        
+        # Each risk must have universal protection
+        - "all($.risk_interfaces.*.protection_definition exists)"
+        - "all($.risk_interfaces.*.protection_definition.implementations.php_functions exists)"
+        
+        # Must have client deployment profiles
+        - "$.client_deployment exists"
+        - "$.client_deployment.profiles.auto_detect exists"
+        
+        # Must have client verification
+        - "all($.risk_interfaces.*.client_verification exists)"
+        
+    on_pass:
+      - set: ["$.metadata.schema_grade", "A+"]
+      - set: ["$.metadata.client_ready", true]
+      - set: ["$.metadata.universal_deployment", true]
+      
+    on_fail: abort("Schema not client-ready")
+
+  - id: generate_output
+    name: "Generate Client-Ready Schema"
+    action: output
+    params:
+      format: json
+      pretty: true
+      filename: "{{output.filename_template}}"

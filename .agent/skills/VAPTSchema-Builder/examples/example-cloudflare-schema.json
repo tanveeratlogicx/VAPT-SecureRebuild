@@ -1,0 +1,27 @@
+{
+  "controls": [
+    {
+      "type": "toggle",
+      "label": "Enable WAF Protection",
+      "key": "UI-RISK-010-001",
+      "default": true
+    },
+    {
+      "type": "test_action",
+      "label": "Verify WAF Rules",
+      "key": "verify_waf",
+      "test_logic": "universal_probe",
+      "test_config": {
+        "method": "GET",
+        "path": "/?test=script",
+        "expected_status": 403
+      }
+    }
+  ],
+  "enforcement": {
+    "driver": "cloudflare",
+    "mappings": {
+      "UI-RISK-010-001": "{ \"action\": \"block\", \"expression\": \"(http.request.uri.query contains \\\"test=script\\\")\", \"description\": \"Block basic payload\" }"
+    }
+  }
+}

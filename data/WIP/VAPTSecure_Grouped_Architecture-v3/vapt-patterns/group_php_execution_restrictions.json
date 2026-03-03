@@ -1,0 +1,12 @@
+{
+  "group_id": "php_execution_restrictions",
+  "target_file": "{ABSPATH}.htaccess",
+  "begin_marker": "# BEGIN VAPT_PHP_EXECUTION",
+  "end_marker": "# END VAPT_PHP_EXECUTION",
+  "merge_strategy": "files_match_php",
+  "rules": {
+    "files_match": [
+      "\\.php$"
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "version": "3.0.0",
+  "groups": {
+    "sensitive_files": "group_sensitive_files.json",
+    "xmlrpc_control": "group_xmlrpc_control.json",
+    "admin_access_control": "group_admin_access_control.json",
+    "php_execution_restrictions": "group_php_execution_restrictions.json",
+    "request_filtering": "group_request_filtering.json",
+    "security_headers": "group_security_headers.json",
+    "directory_browsing": "group_directory_browsing.json",
+    "uploads_isolated": "group_uploads_isolated.json"
+  }
+}

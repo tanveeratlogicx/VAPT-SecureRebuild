@@ -1,0 +1,11 @@
+{
+  "schema_version": "3.0.0",
+  "execution_model": "group_based",
+  "flow": [
+    "load_enabled_risks",
+    "resolve_groups_from_risks",
+    "compile_group_rules",
+    "write_group_block"
+  ],
+  "notes": "This manifest replaces per-risk Apache writing with group-based enforcement."
+}

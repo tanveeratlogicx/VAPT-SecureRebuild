@@ -1,0 +1,575 @@
+# =============================================================================
+# GOOGLE ANTIGRAVITY IDE RULE SET
+# VAPT A+ Multi-Environment Interface Schema Generator v3.1.0
+# Capabilities: Multi-Platform Parallel | Runtime Detection | Environment-Agnostic
+# =============================================================================
+
+metadata:
+  name: "VAPT A+ Multi-Environment Schema Generator"
+  version: "3.1.0"
+  author: "VAPT Architect - Malik"
+  target_grade: "A+"
+  multi_environment: true
+  max_environments_per_risk: 5
+  
+  trigger:
+    file_pattern: "interface_schema_v*.json"
+    status_transition: ["DRAFT → DEVELOP", "DRAFT → PRODUCTION"]
+    auto_execute: true
+    
+  output:
+    filename_template: "interface_schema_v3.1_{{timestamp}}_MULTIENV_A_PLUS.json"
+    backup_original: true
+
+# =============================================================================
+# PHASE 1: MULTI-ENVIRONMENT DISCOVERY
+# =============================================================================
+
+rules:
+
+  - id: discover_environments
+    name: "Discover All Target Environments"
+    action: analyze
+    analyze:
+      source: "{{trigger.file}}"
+      extract:
+        unique_platforms: "unique($.risk_interfaces.*.platform_implementations.*.lib_key)"
+        platform_coverage: "count(unique_platforms)"
+    output:
+      detected_platforms: "{{unique_platforms}}"
+      is_multi_environment: "{{platform_coverage > 1}}"
+
+# =============================================================================
+# PHASE 2: MULTI-ENVIRONMENT SCHEMA STRUCTURE
+# =============================================================================
+
+  - id: inject_multienv_metadata
+    name: "Inject Multi-Environment Metadata"
+    action: inject
+    target: "$"
+    payload:
+      metadata:
+        schema_version: "3.1.0"
+        schema_grade: "A+"
+        schema_type: "MULTI_ENVIRONMENT"
+        generator: "AG-VAPT-MULTIENV-v3.1.0"
+        generated_at: "{{datetime.iso}}"
+        
+        # Multi-environment capabilities
+        environment_handling:
+          mode: "runtime_detection"  # vs "build_time_selection"
+          detection_strategy: "cascade"
+          supported_platforms: "{{discover_environments.detected_platforms}}"
+          fallback_strategy: "closest_match"
+          
+        deployment_profiles:
+          development:
+            platforms: ["PHP Functions", "WordPress Core"]
+            strict_mode: false
+          staging:
+            platforms: ["PHP Functions", ".htaccess", "Nginx"]
+            strict_mode: true
+          production:
+            platforms: "{{discover_environments.detected_platforms}}"
+            strict_mode: true
+            require_all_platforms: false
+
+# =============================================================================
+# PHASE 3: TRANSFORM TO MULTI-ENVIRONMENT RISKS
+# =============================================================================
+
+  - id: transform_to_multienv_risks
+    name: "Transform Single-Platform Risks to Multi-Environment"
+    for_each: "$.risk_interfaces.*"
+    action: transform
+    
+    transform:
+      # Keep original risk data
+      risk_id: "{{item.risk_id}}"
+      title: "{{item.title}}"
+      category: "{{item.category}}"
+      severity: "{{item.severity}}"
+      owasp: "{{item.owasp}}"
+      summary: "{{item.summary}}"
+      
+      # NEW: Multi-environment platform matrix
+      platform_matrix:
+        # Runtime environment selector
+        environment_selector:
+          detection_order: ["apache", "nginx", "litespeed", "iis", "caddy"]
+          detection_methods:
+            apache:
+              server_signature: "Apache"
+              php_sapi: "apache2handler"
+              filesystem: ["/etc/apache2/apache2.conf", "/etc/httpd/conf/httpd.conf"]
+              modules: ["mod_rewrite", "mod_headers", "mod_authz_core"]
+              
+            nginx:
+              server_signature: "nginx"
+              php_sapi: "fpm-fcgi"
+              filesystem: ["/etc/nginx/nginx.conf"]
+              test_command: "nginx -t"
+              
+            litespeed:
+              server_signature: "LiteSpeed"
+              php_sapi: "litespeed"
+              
+            iis:
+              server_signature: "Microsoft-IIS"
+              php_sapi: "cgi-fcgi"
+              
+            caddy:
+              server_signature: "Caddy"
+              config_format: "Caddyfile"
+        
+        # Parallel platform implementations (ALL environments)
+        implementations:
+          # Apache / .htaccess Implementation
+          apache_htaccess:
+            enabled: true
+            priority: 1
+            detection_confidence: "high"
+            
+            lib_key: "htaccess"
+            code_ref: "enforcer_pattern_library_v3.1.patterns.{{item.risk_id}}.htaccess"
+            driver_ref: "vapt_driver_manifest_v3.1.risks.{{item.risk_id}}.steps[*enforcer=.htaccess]"
+            
+            prerequisites:
+              server_software: ["Apache", "LiteSpeed"]
+              modules: ["mod_rewrite"]
+              allowoverride: "FileInfo"
+              writable_paths: [".htaccess"]
+              
+            insertion_rules:
+              anchor_string: "# BEGIN WordPress"
+              position: "before"
+              priority: 1
+              required_context: "<IfModule mod_rewrite.c>"
+              
+            capabilities:
+              blocking_level: "server"
+              performance_impact: "minimal"
+              static_file_protection: true
+              
+            test_config:
+              probe:
+                url_template: "{{site_url}}{{get_test_path(item.risk_id)}}"
+                expected_status: "{{get_expected_status(item.risk_id)}}"
+              validation:
+                method: "http_probe"
+                timeout_ms: 5000
+            
+            rollback:
+              automatic: true
+              backup_file: ".htaccess.vapt.backup"
+              verification_endpoint: "/wp-json/vapt/v1/health"
+            
+            fallback_to: "php_functions"
+
+          # Nginx Implementation  
+          nginx_config:
+            enabled: true
+            priority: 2
+            detection_confidence: "high"
+            
+            lib_key: "nginx"
+            code_ref: "enforcer_pattern_library_v3.1.patterns.{{item.risk_id}}.nginx"
+            driver_ref: "vapt_driver_manifest_v3.1.risks.{{item.risk_id}}.steps[*enforcer=nginx]"
+            
+            prerequisites:
+              server_software: ["Nginx"]
+              context: ["http", "server", "location"]
+              reload_required: true
+              test_command: "nginx -t"
+              
+            insertion_rules:
+              config_file: "/etc/nginx/sites-available/{{server_name}}"
+              context_block: "server"
+              position: "before_location_wp"
+              
+            capabilities:
+              blocking_level: "server"
+              performance_impact: "minimal"
+              static_file_protection: true
+              
+            test_config:
+              probe:
+                url_template: "{{site_url}}{{get_test_path(item.risk_id)}}"
+                expected_status: "{{get_expected_status(item.risk_id)}}"
+              validation:
+                method: "http_probe"
+                post_reload_delay_ms: 1000
+            
+            rollback:
+              automatic: true
+              backup_file: "/etc/nginx/vapt-backups/{{server_name}}.backup"
+              reload_on_restore: true
+            
+            fallback_to: "php_functions"
+
+          # IIS Implementation
+          iis_config:
+            enabled: true
+            priority: 3
+            detection_confidence: "medium"
+            
+            lib_key: "iis"
+            code_ref: "enforcer_pattern_library_v3.1.patterns.{{item.risk_id}}.iis"
+            
+            prerequisites:
+              server_software: ["Microsoft-IIS"]
+              config_format: "web.config"
+              
+            insertion_rules:
+              config_file: "web.config"
+              section: "system.webServer"
+              
+            fallback_to: "php_functions"
+
+          # Caddy Implementation
+          caddy_config:
+            enabled: true
+            priority: 4
+            detection_confidence: "medium"
+            
+            lib_key: "caddy"
+            code_ref: "enforcer_pattern_library_v3.1.patterns.{{item.risk_id}}.caddy"
+            
+            prerequisites:
+              server_software: ["Caddy"]
+              config_format: "Caddyfile"
+              
+            insertion_rules:
+              matcher: "@vapt{{item.risk_id}}"
+              directive: "respond"
+              
+            fallback_to: "php_functions"
+
+          # Cloudflare Implementation (Edge)
+          cloudflare_edge:
+            enabled: true
+            priority: 5
+            detection_confidence: "high"
+            deployment_type: "edge"
+            
+            lib_key: "cloudflare"
+            code_ref: "enforcer_pattern_library_v3.1.patterns.{{item.risk_id}}.cloudflare"
+            
+            prerequisites:
+              proxy_enabled: true
+              api_token_scope: ["zone:read", "waf:write"]
+              
+            insertion_rules:
+              rule_type: "custom_rule"
+              expression_builder: "vapt_expression_builder"
+              
+            capabilities:
+              blocking_level: "edge"
+              performance_impact: "zero_origin"
+              ddos_protection: true
+              
+            fallback_to: "origin_htaccess_or_php"
+
+          # Universal PHP Fallback (Works on ALL environments)
+          php_functions:
+            enabled: true
+            priority: 99  # Always last
+            detection_confidence: "guaranteed"
+            universal_fallback: true
+            
+            lib_key: "php_functions"
+            code_ref: "enforcer_pattern_library_v3.1.patterns.{{item.risk_id}}.php_functions"
+            driver_ref: "vapt_driver_manifest_v3.1.risks.{{item.risk_id}}.steps[*enforcer=PHP Functions]"
+            
+            prerequisites:
+              wordpress_loaded: true
+              php_version: ">=7.4"
+              hooks_available: true
+              
+            insertion_rules:
+              method: "add_action"
+              hook: "{{get_wordpress_hook(item.risk_id)}}"
+              priority: 1
+              
+            capabilities:
+              blocking_level: "application"
+              performance_impact: "low"
+              static_file_protection: false  # Limitation
+              
+            test_config:
+              probe:
+                url_template: "{{site_url}}{{get_test_path(item.risk_id)}}"
+                expected_status: "{{get_expected_status(item.risk_id)}}"
+              validation:
+                method: "wordpress_hook_test"
+                
+            limitations:
+              - "Cannot block static file requests before WordPress loads"
+              - "Slightly higher latency than server-level blocking"
+              
+            # PHP has no fallback - it's the universal last resort
+
+      # Runtime selection logic
+      runtime_selection:
+        strategy: "capability_maximization"
+        selection_flow:
+          step_1: "detect_server_software"
+          step_2: "check_prerequisites"
+          step_3: "test_capability_match"
+          step_4: "select_highest_priority_valid"
+          step_5: "deploy_with_fallback_chain"
+          
+        health_monitoring:
+          enabled: true
+          check_interval_minutes: 5
+          auto_switch_on_failure: true
+          
+        reporting:
+          active_platform: "logged"
+          fallback_activations: "alerted"
+          performance_metrics: "collected"
+
+# =============================================================================
+# PHASE 4: CROSS-ENVIRONMENT CONSISTENCY
+# =============================================================================
+
+  - id: ensure_cross_environment_consistency
+    name: "Ensure Consistent Behavior Across Environments"
+    for_each: "$.risk_interfaces.*"
+    action: inject
+    
+    payload:
+      cross_environment:
+        # Unified test suite - same test works on all platforms
+        unified_test_suite:
+          test_id: "UNIFIED-{{item.risk_id}}"
+          description: "Environment-agnostic validation"
+          
+          test_cases:
+            - name: "blocking_effectiveness"
+              description: "Verify vulnerability is blocked"
+              applies_to: ["apache_htaccess", "nginx_config", "iis_config", "caddy_config", "cloudflare_edge", "php_functions"]
+              expected_result: "request_blocked"
+              
+            - name: "false_positive_check"
+              description: "Verify legitimate traffic passes"
+              applies_to: ["apache_htaccess", "nginx_config", "cloudflare_edge", "php_functions"]
+              expected_result: "legitimate_passes"
+              
+            - name: "performance_impact"
+              description: "Measure response time delta"
+              applies_to: ["apache_htaccess", "nginx_config", "php_functions"]
+              threshold_ms: 10
+              
+        # Consistent configuration across platforms
+        configuration_sync:
+          enabled: true
+          sync_fields: ["blocking_mode", "exclusions", "rate_limits"]
+          
+        # Shared state (if applicable)
+        shared_state:
+          storage: "wordpress_options"
+          key_prefix: "vapt_{{item.risk_id}}"
+          shared_across: ["apache_htaccess", "nginx_config", "php_functions"]
+
+# =============================================================================
+# PHASE 5: DEPLOYMENT ORCHESTRATION
+# =============================================================================
+
+  - id: add_deployment_orchestration
+    name: "Add Multi-Environment Deployment Orchestration"
+    for_each: "$.risk_interfaces.*"
+    action: inject
+    
+    payload:
+      deployment:
+        # Environment-specific deployment configs
+        strategies:
+          # Single server - Apache
+          single_apache:
+            condition: "detected_platform == 'apache' AND server_count == 1"
+            deploy_order: ["apache_htaccess", "php_functions"]
+            parallel: false
+            
+          # Single server - Nginx
+          single_nginx:
+            condition: "detected_platform == 'nginx' AND server_count == 1"
+            deploy_order: ["nginx_config", "php_functions"]
+            parallel: false
+            
+          # Load balanced - Mixed
+          mixed_load_balanced:
+            condition: "detected_platforms IN ['apache', 'nginx'] AND server_count > 1"
+            deploy_order:
+              phase_1: ["cloudflare_edge"]  # Edge first if available
+              phase_2: ["apache_htaccess", "nginx_config"]  # Parallel by server type
+              phase_3: ["php_functions"]  # Universal fallback
+            parallel: true
+            canary_percentage: 10
+            
+          # Kubernetes / Container
+          container_orchestrated:
+            condition: "environment == 'kubernetes' OR environment == 'docker'"
+            deploy_order: ["nginx_config", "php_functions"]
+            config_map: true
+            rolling_update: true
+            
+        # Rollback orchestration
+        rollback_strategy:
+          mode: "coordinated"
+          sequence: "reverse_deployment"
+          verification: "health_check_all_servers"
+          
+        # Monitoring across environments
+        monitoring:
+          metrics:
+            - platform_active
+            - block_count
+            - false_positive_count
+            - response_time_p95
+          aggregation: "centralized"
+          alerting: "per_platform"
+
+# =============================================================================
+# PHASE 6: UI/UX FOR MULTI-ENVIRONMENT
+# =============================================================================
+
+  - id: enhance_ui_multienv
+    name: "Enhance UI for Multi-Environment Display"
+    for_each: "$.risk_interfaces.*"
+    action: transform
+    
+    transform:
+      source: "{{item}}.ui_layout"
+      merge:
+        multi_environment_display:
+          show_platform_badges: true
+          show_active_platform_indicator: true
+          show_fallback_chain: true
+          
+        platform_status_indicators:
+          apache_htaccess:
+            icon: "apache"
+            color: "red"
+            label: "Apache"
+          nginx_config:
+            icon: "nginx"
+            color: "green"
+            label: "Nginx"
+          cloudflare_edge:
+            icon: "cloudflare"
+            color: "orange"
+            label: "Cloudflare"
+          php_functions:
+            icon: "php"
+            color: "purple"
+            label: "PHP Fallback"
+            
+        deployment_visualization:
+          type: "flow_diagram"
+          show_detection_path: true
+          show_fallback_path: true
+          
+        actions:
+          - id: "deploy_all_platforms"
+            label: "Deploy to All Environments"
+            confirmation: true
+            
+          - id: "test_all_platforms"
+            label: "Test All Platforms"
+            confirmation: false
+            
+          - id: "view_platform_comparison"
+            label: "Compare Platform Capabilities"
+            confirmation: false
+
+# =============================================================================
+# PHASE 7: VALIDATION & OUTPUT
+# =============================================================================
+
+  - id: validate_multienv_aplus
+    name: "Validate Multi-Environment A+ Criteria"
+    action: validate
+    
+    params:
+      checks:
+        # Structure
+        - "$.metadata.schema_version == '3.1.0'"
+        - "$.metadata.schema_type == 'MULTI_ENVIRONMENT'"
+        
+        # Multi-environment requirements
+        - "count($.risk_interfaces[0].platform_matrix.implementations) >= 3"
+        - "$.risk_interfaces.*.platform_matrix.implementations.apache_htaccess exists"
+        - "$.risk_interfaces.*.platform_matrix.implementations.nginx_config exists"
+        - "$.risk_interfaces.*.platform_matrix.implementations.php_functions exists"
+        
+        # Runtime selection
+        - "$.risk_interfaces.*.platform_matrix.environment_selector exists"
+        - "$.risk_interfaces.*.runtime_selection.strategy exists"
+        
+        # Cross-environment consistency
+        - "$.risk_interfaces.*.cross_environment.unified_test_suite exists"
+        
+        # Deployment orchestration
+        - "$.risk_interfaces.*.deployment.strategies exists"
+        
+    on_pass:
+      - set: ["$.metadata.production_approved", true]
+      - set: ["$.metadata.grade_verified", "A+"]
+      - set: ["$.metadata.multi_environment_ready", true]
+      
+    on_fail: abort("Multi-Environment A+ criteria not met")
+
+  - id: generate_multienv_output
+    name: "Generate Multi-Environment A+ Schema"
+    action: output
+    
+    params:
+      format: json
+      pretty: true
+      filename: "{{output.filename_template}}"
+      
+      include_sections:
+        - metadata
+        - global_config
+        - risk_interfaces
+        - deployment_profiles
+        - environment_detection_guide
+
+# =============================================================================
+# HELPER FUNCTIONS
+# =============================================================================
+
+functions:
+
+  get_test_path: |
+    function(risk_id) {
+      const paths = {
+        "RISK-003": "/wp-json/wp/v2/users",
+        "RISK-005": "/?author=1",
+        "RISK-007": "/wp-login.php",
+        "default": "/"
+      };
+      return paths[risk_id] || paths.default;
+    }
+
+  get_expected_status: |
+    function(risk_id) {
+      // Most protections return 403 Forbidden
+      return 403;
+    }
+
+  get_wordpress_hook: |
+    function(risk_id) {
+      const hooks = {
+        "RISK-003": "rest_api_init",
+        "RISK-005": "init",
+        "RISK-007": "wp_login_failed",
+        "default": "init"
+      };
+      return hooks[risk_id] || hooks.default;
+    }
+
+# =============================================================================
+# END OF MULTI-ENVIRONMENT RULE SET
+# =============================================================================

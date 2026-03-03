@@ -1,0 +1,27 @@
+{
+  "controls": [
+    {
+      "type": "toggle",
+      "label": "Enable wp-cron.php Protection",
+      "key": "UI-RISK-001-001",
+      "default": true
+    },
+    {
+      "type": "test_action",
+      "label": "Verify wp-cron.php",
+      "key": "verify_cron",
+      "test_logic": "universal_probe",
+      "test_config": {
+        "method": "GET",
+        "path": "/wp-cron.php",
+        "expected_status": 403
+      }
+    }
+  ],
+  "enforcement": {
+    "driver": "wp-config",
+    "mappings": {
+      "UI-RISK-001-001": "define('DISABLE_WP_CRON', true);"
+    }
+  }
+}

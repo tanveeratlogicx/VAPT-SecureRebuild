@@ -1,0 +1,27 @@
+{
+  "controls": [
+    {
+      "type": "toggle",
+      "label": "Enable IIS Request Filtering",
+      "key": "UI-RISK-011-001",
+      "default": true
+    },
+    {
+      "type": "test_action",
+      "label": "Verify Filtering",
+      "key": "verify_iis_filter",
+      "test_logic": "universal_probe",
+      "test_config": {
+        "method": "GET",
+        "path": "/hidden-folder",
+        "expected_status": 404
+      }
+    }
+  ],
+  "enforcement": {
+    "driver": "iis",
+    "mappings": {
+      "UI-RISK-011-001": "<rule name=\"Block Hidden\" stopProcessing=\"true\">\n  <match url=\"^hidden-folder/.*\" />\n  <action type=\"CustomResponse\" statusCode=\"404\" subStatusCode=\"0\" statusReason=\"Not Found\" statusDescription=\"Not Found\" />\n</rule>"
+    }
+  }
+}

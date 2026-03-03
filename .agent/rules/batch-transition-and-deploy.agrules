@@ -1,0 +1,55 @@
+# =============================================================================
+# GOOGLE ANTIGRAVITY IDE RULE SET
+# Batch Transition Rule v1.0.0
+# File: batch-transition-and-deploy.agrules
+#
+# PURPOSE: Transition VAPT Risks 001-012 from Draft to Develop status.
+# This rule is triggered by the agent when the user wants to bulk-advance
+# early risks to the Develop stage for workbench review.
+#
+# TRIGGER CONDITIONS:
+# - User intent: "batch transition early risks", "transition risks 1 to 12 to develop"
+#
+# OUTPUT: Update DB status for risks 001-012 to 'Develop'
+# =============================================================================
+
+metadata:
+  rule_name: "Batch Transition Rule"
+  rule_id: "batch-transition-and-deploy"
+  version: "1.0.0"
+  purpose: "Bulk transition early risks (001-012) status to Develop for workbench review"
+
+  trigger:
+    user_intent: ["batch transition", "transition risks to develop", "advance early risks"]
+
+# =============================================================================
+# PHASE 1: EXECUTE TRANSITION VIA WP-CLI
+# =============================================================================
+
+rules:
+  - id: execute_transition
+    name: "Transition RISK-001 through RISK-012 to Develop"
+    action: execute_php
+    description: |
+      Run the following PHP snippet using `wp eval` or `wp eval-file` to update
+      the status of RISK-001 through RISK-012 to 'Develop' in the database.
+
+    payload: |
+      <?php
+      if (!defined('ABSPATH')) {
+          die("ABSPATH not defined. Please run via `wp eval-file`.");
+      }
+
+      require_once WP_PLUGIN_DIR . '/VAPT-Secure/includes/class-vaptsecure-db.php';
+
+      $risks = [];
+      for ($i = 1; $i <= 12; $i++) {
+          $risks[] = 'RISK-' . str_pad($i, 3, '0', STR_PAD_LEFT);
+      }
+
+      echo "=== Batch Transition to Develop ===\n";
+      foreach ($risks as $risk_id) {
+          VAPTSECURE_DB::update_feature_status($risk_id, 'Develop');
+          echo "  Transitioned $risk_id -> Develop\n";
+      }
+      echo "=== Done ===\n";

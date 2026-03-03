@@ -1,0 +1,1877 @@
+# =============================================================================
+# GOOGLE ANTIGRAVITY IDE RULE SET
+# VAPT Feature Deployment Rule v4.0.0
+# File: vapt-feature-deployment.agrules
+#
+# PURPOSE: Transform VAPT Interface Schemas into working, deployed security 
+# protections that auto-adapt to ANY client environment at runtime.
+#
+# TRIGGER CONDITIONS:
+# - File pattern: "interface_schema_v*.json"
+# - User intent: deploy, implement, activate protections
+# - Status: DRAFT → DEVELOP, DRAFT → PRODUCTION
+#
+# OUTPUT: Working WordPress plugin with multi-platform deployment
+# =============================================================================
+
+metadata:
+  rule_name: "VAPT Feature Deployment Rule"
+  rule_id: "vapt-feature-deployment"
+  version: "4.0.0"
+  purpose: "Transform schema to working deployment"
+  target_grade: "A+"
+
+  trigger:
+    file_pattern: "interface_schema_v*.json"
+    user_intent: ["deploy", "implement", "activate", "make it work", "get it running"]
+    status_transition: ["DRAFT → DEVELOP", "DRAFT → PRODUCTION"]
+
+  output:
+    filename_template: "vapt-security-plugin-{{timestamp}}.zip"
+    format: "wordpress_plugin"
+
+# =============================================================================
+# PHASE 1: SCHEMA VALIDATION & ANALYSIS
+# =============================================================================
+
+rules:
+
+  - id: validate_schema_structure
+    name: "Validate Interface Schema Structure"
+    action: validate
+    condition: "{{trigger.file}} exists"
+
+    validate:
+      schema: "{{trigger.file}}"
+      required_paths:
+        - "$.metadata.schema_version"
+        - "$.global_config.runtime_environment_detection"
+        - "$.global_config.runtime_platform_selection"
+        - "$.risk_interfaces"
+        - "$.risk_interfaces[0].protection_definition"
+        - "$.risk_interfaces[0].protection_definition.implementations.php_functions"
+
+    on_pass:
+      - set: ["$.validation.status", "VALID"]
+      - proceed_to: "analyze_deployment_requirements"
+
+    on_fail:
+      - abort: "Invalid schema structure. Missing required protection definitions."
+      - suggest: "Run VAPT Client-Ready Multi-Environment Schema Generator first."
+
+  - id: analyze_deployment_requirements
+    name: "Analyze Deployment Requirements"
+    action: analyze
+    analyze:
+      source: "{{trigger.file}}"
+      extract:
+        risk_count: "count($.risk_interfaces)"
+        risk_ids: "$.risk_interfaces[*].risk_id"
+        platforms_available: "unique($.risk_interfaces[*].protection_definition.implementations.keys())"
+        has_cloudflare: "exists($.risk_interfaces[*].protection_definition.implementations.cloudflare_edge)"
+        has_apache: "exists($.risk_interfaces[*].protection_definition.implementations.apache_htaccess)"
+        has_nginx: "exists($.risk_interfaces[*].protection_definition.implementations.nginx_config)"
+        has_php_fallback: "exists($.risk_interfaces[*].protection_definition.implementations.php_functions)"
+
+    output:
+      deployment_profile:
+        total_protections: "{{risk_count}}"
+        platform_support: "{{platforms_available}}"
+        universal_fallback_ready: "{{has_php_fallback}}"
+
+# =============================================================================
+# PHASE 2: GENERATE ENVIRONMENT DETECTION MODULE
+# =============================================================================
+
+  - id: generate_environment_detector
+    name: "Generate Runtime Environment Detector"
+    action: generate_file
+    target: "vapt-environment-detector.php"
+
+    template: |
+      <?php
+      /**
+       * VAPT Runtime Environment Detector v4.0.0
+       * Auto-generated from {{trigger.file}}
+       * Detection cascade: {{source.global_config.runtime_environment_detection.detection_cascade | length}} methods
+       */
+
+      if (!defined('ABSPATH')) exit;
+
+      class VAPT_Environment_Detector {
+          private $cache_key = 'vapt_environment_profile';
+          private $cache_duration;
+          private $detection_config;
+
+          public function __construct() {
+              $this->detection_config = {{source.global_config.runtime_environment_detection | json_encode}};
+              $this->cache_duration = ($this->detection_config['cache_duration_minutes'] ?? 60) * 60;
+          }
+
+          /**
+           * Main detection entry point
+           * Runs cascade detection and caches results
+           */
+          public function detect() {
+              $cached = get_transient($this->cache_key);
+              if ($cached !== false) {
+                  return $cached;
+              }
+
+              $profile = $this->run_detection_cascade();
+              $profile['detected_at'] = time();
+              $profile['detection_version'] = $this->detection_config['version'] ?? '4.0.0';
+
+              set_transient($this->cache_key, $profile, $this->cache_duration);
+
+              return $profile;
+          }
+
+          /**
+           * Execute detection cascade in priority order
+           */
+          private function run_detection_cascade() {
+              $cascade = $this->detection_config['detection_cascade'] ?? [];
+              $results = [];
+
+              foreach ($cascade as $detector) {
+                  $method = 'detect_' . str_replace(['-', '.'], '_', $detector['name']);
+
+                  if (method_exists($this, $method)) {
+                      $start_time = microtime(true);
+                      $result = $this->$method($detector);
+                      $elapsed = (microtime(true) - $start_time) * 1000;
+
+                      // Respect timeout
+                      if (isset($detector['timeout_ms']) && $elapsed > $detector['timeout_ms']) {
+                          $result['timeout_exceeded'] = true;
+                      }
+
+                      $results[$detector['name']] = array_merge($result, [
+                          'priority' => $detector['priority'],
+                          'confidence' => $detector['confidence'],
+                          'elapsed_ms' => $elapsed
+                      ]);
+                  }
+              }
+
+              return $this->build_capability_profile($results);
+          }
+
+          /**
+           * Detection Method 1: Server Software Header
+           */
+          private function detect_server_software_header($config) {
+              $variable = $config['variable'] ?? 'SERVER_SOFTWARE';
+              $software = $_SERVER[$variable] ?? 'unknown';
+
+              $detected = 'unknown';
+              if (stripos($software, 'nginx') !== false) $detected = 'nginx';
+              elseif (stripos($software, 'litespeed') !== false) $detected = 'litespeed';
+              elseif (stripos($software, 'apache') !== false) $detected = 'apache';
+              elseif (stripos($software, 'iis') !== false) $detected = 'iis';
+
+              return [
+                  'server_software_raw' => $software,
+                  'server_software' => $detected,
+                  'detected' => $detected !== 'unknown'
+              ];
+          }
+
+          /**
+           * Detection Method 2: PHP SAPI Detection
+           */
+          private function detect_php_sapi_detection($config) {
+              $sapi = php_sapi_name();
+              $is_cgi = (strpos($sapi, 'cgi') !== false);
+
+              return [
+                  'php_sapi' => $sapi,
+                  'is_cgi' => $is_cgi,
+                  'is_cli' => ($sapi === 'cli'),
+                  'detected' => true
+              ];
+          }
+
+          /**
+           * Detection Method 3: Filesystem Probe
+           */
+          private function detect_filesystem_probe($config) {
+              $probes = $config['probes'] ?? [];
+              $results = [];
+
+              foreach ($probes as $server => $paths) {
+                  $results[$server] = [
+                      'config_found' => false,
+                      'config_paths' => [],
+                      'writable' => false
+                  ];
+
+                  foreach ($paths as $path) {
+                      // Handle relative paths
+                      if ($path === '.htaccess') {
+                          $path = ABSPATH . $path;
+                      }
+
+                      if (file_exists($path)) {
+                          $results[$server]['config_found'] = true;
+                          $results[$server]['config_paths'][] = $path;
+                          if (is_writable($path)) {
+                              $results[$server]['writable'] = true;
+                          }
+                      }
+                  }
+              }
+
+              return [
+                  'filesystem_probes' => $results,
+                  'detected' => true
+              ];
+          }
+
+          /**
+           * Detection Method 4: Function Availability
+           */
+          private function detect_function_availability($config) {
+              $tests = $config['tests'] ?? [];
+              $results = [];
+
+              foreach ($tests as $server => $functions) {
+                  $results[$server] = [];
+                  foreach ($functions as $function) {
+                      $results[$server][$function] = function_exists($function);
+                  }
+              }
+
+              return [
+                  'function_tests' => $results,
+                  'detected' => true
+              ];
+          }
+
+          /**
+           * Detection Method 5: Hosting Provider Detection
+           */
+          private function detect_hosting_provider_detection($config) {
+              $indicators = $config['indicators'] ?? [];
+              $detected_provider = 'unknown';
+
+              foreach ($indicators as $provider => $env_var) {
+                  if (!empty($_SERVER[$env_var]) || !empty(getenv($env_var))) {
+                      $detected_provider = $provider;
+                      break;
+                  }
+              }
+
+              // Edge proxy detection via headers
+              $edge_proxy = 'none';
+              if (!empty($_SERVER['HTTP_CF_RAY'])) $edge_proxy = 'cloudflare';
+              elseif (!empty($_SERVER['HTTP_X_SUCURI_ID'])) $edge_proxy = 'sucuri';
+              elseif (!empty($_SERVER['HTTP_X_EDGE_LOCATION'])) $edge_proxy = 'aws_cloudfront';
+
+              return [
+                  'hosting_provider' => $detected_provider,
+                  'edge_proxy' => $edge_proxy,
+                  'detected' => true
+              ];
+          }
+
+          /**
+           * Build final capability profile from detection results
+           */
+          private function build_capability_profile($results) {
+              $matrix = $this->detection_config['capability_matrix'] ?? [];
+              $profile = [
+                  'capabilities' => [],
+                  'optimal_platform' => 'php_functions',
+                  'platform_tier' => 'limited_php_only'
+              ];
+
+              // Evaluate each capability matrix entry
+              foreach ($matrix as $platform => $definition) {
+                  $detected_by = $definition['detected_by'] ?? [];
+                  $is_match = false;
+
+                  foreach ($detected_by as $criterion) {
+                      if ($this->matches_criterion($criterion, $results)) {
+                          $is_match = true;
+                          break;
+                      }
+                  }
+
+                  if ($is_match || $platform === 'limited_php_only') {
+                      $profile['capabilities'][$platform] = $definition['capabilities'] ?? [];
+                      $profile['capabilities'][$platform]['requirements'] = $definition['requirements'] ?? [];
+                  }
+              }
+
+              // Select optimal platform using decision tree
+              $profile['optimal_platform'] = $this->select_optimal_platform($profile['capabilities']);
+              $profile['platform_tier'] = $profile['optimal_platform'];
+
+              return $profile;
+          }
+
+          /**
+           * Match detection criterion against results
+           */
+          private function matches_criterion($criterion, $results) {
+              // Parse criterion like "server_software_header:Apache"
+              if (strpos($criterion, ':') !== false) {
+                  list($detector, $value) = explode(':', $criterion, 2);
+
+                  if (isset($results[$detector])) {
+                      $result = $results[$detector];
+
+                      if ($detector === 'server_software_header') {
+                          return stripos($result['server_software_raw'] ?? '', $value) !== false;
+                      }
+
+                      if ($detector === 'filesystem_probe') {
+                          return isset($result['filesystem_probes'][$value]) && 
+                                 $result['filesystem_probes'][$value]['config_found'];
+                      }
+                  }
+              }
+
+              return false;
+          }
+
+          /**
+           * Select optimal platform based on capabilities
+           */
+          private function select_optimal_platform($capabilities) {
+              $selection_logic = {{source.global_config.runtime_platform_selection.decision_tree | json_encode}};
+
+              foreach ($selection_logic as $step) {
+                  if (isset($step['if']) && isset($step['then'])) {
+                      // Parse condition like "environment.cloudflare_edge.available"
+                      if ($this->evaluate_condition($step['if'], $capabilities)) {
+                          return $step['then']['select'] ?? 'php_functions';
+                      }
+                  }
+              }
+
+              return 'php_functions'; // Ultimate fallback
+          }
+
+          /**
+           * Evaluate platform selection condition
+           */
+          private function evaluate_condition($condition, $capabilities) {
+              // Handle "environment.X.available AND environment.Y.configured"
+              if (strpos($condition, ' AND ') !== false) {
+                  $parts = explode(' AND ', $condition);
+                  foreach ($parts as $part) {
+                      if (!$this->evaluate_single_condition(trim($part), $capabilities)) {
+                          return false;
+                      }
+                  }
+                  return true;
+              }
+
+              return $this->evaluate_single_condition($condition, $capabilities);
+          }
+
+          private function evaluate_single_condition($condition, $capabilities) {
+              // Parse "environment.cloudflare_edge.available"
+              if (preg_match('/environment\.(\w+)\.(\w+)/', $condition, $matches)) {
+                  $platform = $matches[1];
+                  $property = $matches[2];
+
+                  if ($property === 'available') {
+                      return isset($capabilities[$platform]);
+                  }
+
+                  if ($property === 'configured' || $property === 'writable') {
+                      return isset($capabilities[$platform]) && 
+                             !empty($capabilities[$platform]['capabilities'][$property]);
+                  }
+              }
+
+              return false;
+          }
+
+          /**
+           * Clear detection cache
+           */
+          public function clear_cache() {
+              delete_transient($this->cache_key);
+          }
+
+          /**
+           * Force re-detection
+           */
+          public function redetect() {
+              $this->clear_cache();
+              return $this->detect();
+          }
+      }
+
+      // Helper function for global access
+      function vapt_get_environment() {
+          static $detector = null;
+          if ($detector === null) {
+              $detector = new VAPT_Environment_Detector();
+          }
+          return $detector->detect();
+      }
+
+# =============================================================================
+# PHASE 3: GENERATE PLATFORM-SPECIFIC DEPLOYERS
+# =============================================================================
+
+  - id: generate_apache_deployer
+    name: "Generate Apache .htaccess Deployer"
+    action: generate_file
+    target: "deployers/class-vapt-apache-deployer.php"
+    condition: "{{source.has_apache}}"
+
+    driver:
+      type: htaccess
+      target: root  # REQUIRED: "root" for site root .htaccess, "uploads" for wp-content/uploads
+
+    template: |
+      <?php
+      /**
+       * Apache .htaccess Deployer
+       * Handles Apache mod_rewrite rule deployment
+       */
+
+      if (!defined('ABSPATH')) exit;
+
+      class VAPT_Apache_Deployer {
+          private $htaccess_path;
+          private $backup_path;
+          private $target;
+
+          public function __construct($target = 'root') {
+              $this->target = $target;
+
+              // Determine target location
+              if ($target === 'uploads') {
+                  $this->htaccess_path = WP_CONTENT_DIR . '/uploads/.htaccess';
+              } else {
+                  // Default to root
+                  $this->htaccess_path = ABSPATH . '.htaccess';
+              }
+
+              $this->backup_path = WP_CONTENT_DIR . '/vapt-backups/';
+          }
+
+          /**
+           * Get the configured target
+           */
+          public function get_target() {
+              return $this->target;
+          }
+
+          /**
+           * Deploy protection for a specific risk
+           */
+          public function deploy($risk_id, $implementation) {
+              // Validate prerequisites
+              if (!$this->can_deploy()) {
+                  return new WP_Error(
+                      'cannot_deploy',
+                      '.htaccess is not writable. Check file permissions.',
+                      ['path' => $this->htaccess_path]
+                  );
+              }
+
+              // Create backup
+              $this->create_backup();
+
+              // Generate rules
+              $rules = $this->generate_rules($risk_id, $implementation);
+
+              if (empty($rules)) {
+                  return new WP_Error('no_rules', "No rules generated for risk: {$risk_id}");
+              }
+
+              // Insert with markers
+              $result = $this->insert_with_markers($risk_id, $rules);
+
+              if ($result === false) {
+                  return new WP_Error('write_failed', 'Failed to write to .htaccess');
+              }
+
+              return [
+                  'status' => 'deployed',
+                  'platform' => 'apache_htaccess',
+                  'risk_id' => $risk_id,
+                  'rules_count' => count($rules),
+                  'backup_created' => true
+              ];
+          }
+
+          /**
+           * Check if deployment is possible
+           */
+          public function can_deploy() {
+              if (!file_exists($this->htaccess_path)) {
+                  // Try to create it
+                  @file_put_contents($this->htaccess_path, "# VAPT Security Rules\n");
+              }
+
+              return is_writable($this->htaccess_path);
+          }
+
+          /**
+           * Create backup of current .htaccess
+           */
+          private function create_backup() {
+              if (!file_exists($this->htaccess_path)) return false;
+
+              wp_mkdir_p($this->backup_path);
+
+              $backup_file = $this->backup_path . '.htaccess.backup.' . time();
+              copy($this->htaccess_path, $backup_file);
+
+              // Keep only last 10 backups
+              $backups = glob($this->backup_path . '.htaccess.backup.*');
+              if (count($backups) > 10) {
+                  usort($backups, function($a, $b) {
+                      return filemtime($a) - filemtime($b);
+                  });
+                  foreach (array_slice($backups, 0, count($backups) - 10) as $old) {
+                      @unlink($old);
+                  }
+              }
+
+              return true;
+          }
+
+          /**
+           * Generate Apache rules from implementation
+           */
+          private function generate_rules($risk_id, $implementation) {
+              $rules = [];
+              $config_rules = $implementation['rules'] ?? [];
+
+              // If rules are explicitly provided, use them
+              if (!empty($config_rules)) {
+                  return is_array($config_rules) ? $config_rules : [$config_rules];
+              }
+
+              // Otherwise generate based on risk_id patterns
+              switch ($risk_id) {
+                  case 'user-enumeration-via-author':
+                      $rules = [
+                          'RewriteEngine On',
+                          'RewriteCond %{QUERY_STRING} author=\d [NC]',
+                          'RewriteRule .* - [F,L]'
+                      ];
+                      break;
+
+                  case 'xmlrpc-brute-force':
+                      $rules = [
+                          '<Files xmlrpc.php>',
+                          '    Order Deny,Allow',
+                          '    Deny from all',
+                          '</Files>'
+                      ];
+                      break;
+
+                  case 'wp-json-user-enumeration':
+                      $rules = [
+                          'RewriteCond %{REQUEST_URI} ^/wp-json/wp/v2/users [NC]',
+                          'RewriteRule .* - [F,L]'
+                      ];
+                      break;
+
+                  case 'file-path-traversal':
+                      $rules = [
+                          'RewriteCond %{QUERY_STRING} \.\.\/ [NC,OR]',
+                          'RewriteCond %{QUERY_STRING} %2e%2e%2f [NC,OR]',
+                          'RewriteCond %{QUERY_STRING} %252e%252e%252f [NC]',
+                          'RewriteRule .* - [F,L]'
+                      ];
+                      break;
+
+                  default:
+                      // Generic protection pattern
+                      $rules = [
+                          '# VAPT Protection: ' . $risk_id,
+                          'Header set X-VAPT-Protection "active"',
+                          'Header set X-VAPT-Risk-ID "' . $risk_id . '"'
+                      ];
+              }
+
+              return $rules;
+          }
+
+          /**
+           * Insert rules with WordPress-style markers
+           */
+          private function insert_with_markers($risk_id, $rules) {
+              // Ensure directory exists for uploads target
+              $dir = dirname($this->htaccess_path);
+              if (!file_exists($dir)) {
+                  wp_mkdir_p($dir);
+              }
+
+              if (!file_exists($this->htaccess_path)) {
+                  @file_put_contents($this->htaccess_path, "# VAPT Security Rules\n");
+              }
+
+              $existing = file_get_contents($this->htaccess_path);
+
+              $marker = "# BEGIN VAPT: {$risk_id}";
+              $end_marker = "# END VAPT: {$risk_id}";
+
+              // Remove existing block
+              $pattern = '/'.preg_quote($marker, '/').'.*?'.preg_quote($end_marker, '/').'\n?/s';
+              $existing = preg_replace($pattern, '', $existing);
+
+              // Build new block
+              $block = $marker . "\n";
+              foreach ($rules as $rule) {
+                  $block .= $rule . "\n";
+              }
+              $block .= $end_marker . "\n";
+
+              // For root target, insert after WordPress block if present
+              if ($this->target === 'root' && strpos($existing, '# BEGIN WordPress') !== false) {
+                  $existing = preg_replace('/(# BEGIN WordPress)/', $block . "$1", $existing);
+              } else {
+                  // For uploads or no WordPress markers, prepend
+                  $existing = $block . $existing;
+              }
+
+              return file_put_contents($this->htaccess_path, $existing, LOCK_EX);
+          }
+
+          /**
+           * Remove protection for a risk
+           */
+          public function undeploy($risk_id) {
+              if (!file_exists($this->htaccess_path)) return true;
+
+              $existing = file_get_contents($this->htaccess_path);
+              $marker = "# BEGIN VAPT: {$risk_id}";
+              $end_marker = "# END VAPT: {$risk_id}";
+
+              $pattern = '/'.preg_quote($marker, '/').'.*?'.preg_quote($end_marker, '/').'\n?/s';
+              $new_content = preg_replace($pattern, '', $existing);
+
+              if ($new_content !== $existing) {
+                  return file_put_contents($this->htaccess_path, $new_content, LOCK_EX);
+              }
+
+              return true;
+          }
+
+          /**
+           * Test configuration validity
+           */
+          public function test_config() {
+              // Apache doesn't have a built-in test command like nginx
+              // We can only verify syntax if mod_rewrite is available
+              if (function_exists('apache_get_modules')) {
+                  $modules = apache_get_modules();
+                  return [
+                      'mod_rewrite' => in_array('mod_rewrite', $modules),
+                      'mod_headers' => in_array('mod_headers', $modules)
+                  ];
+              }
+
+              return ['status' => 'unknown', 'note' => 'Cannot verify Apache modules'];
+          }
+      }
+
+  - id: generate_nginx_deployer
+    name: "Generate Nginx Config Deployer"
+    action: generate_file
+    target: "deployers/class-vapt-nginx-deployer.php"
+    condition: "{{source.has_nginx}}"
+
+    template: |
+      <?php
+      /**
+       * Nginx Config Deployer
+       * Generates nginx.conf snippets for manual installation
+       */
+
+      if (!defined('ABSPATH')) exit;
+
+      class VAPT_Nginx_Deployer {
+          private $config_dir;
+
+          public function __construct() {
+              $this->config_dir = WP_CONTENT_DIR . '/vapt-nginx-configs/';
+          }
+
+          /**
+           * Deploy protection for a specific risk
+           */
+          public function deploy($risk_id, $implementation) {
+              wp_mkdir_p($this->config_dir);
+
+              $config = $this->generate_config($risk_id, $implementation);
+              $filename = $risk_id . '.conf';
+              $filepath = $this->config_dir . $filename;
+
+              $result = file_put_contents($filepath, $config);
+
+              if ($result === false) {
+                  return new WP_Error('write_failed', 'Failed to write nginx config');
+              }
+
+              return [
+                  'status' => 'manual_install_required',
+                  'platform' => 'nginx_config',
+                  'risk_id' => $risk_id,
+                  'config_path' => $filepath,
+                  'config_content' => $config,
+                  'instructions' => $this->get_install_instructions($filepath)
+              ];
+          }
+
+          /**
+           * Generate nginx configuration
+           */
+          private function generate_config($risk_id, $implementation) {
+              $rules = $implementation['rules'] ?? [];
+              $config = [];
+
+              $config[] = "# VAPT Protection: {$risk_id}";
+              $config[] = "# Generated: " . date('Y-m-d H:i:s');
+              $config[] = "";
+
+              // If explicit rules provided, use them
+              if (!empty($rules)) {
+                  if (is_array($rules)) {
+                      $config = array_merge($config, $rules);
+                  } else {
+                      $config[] = $rules;
+                  }
+              } else {
+                  // Generate based on risk_id
+                  switch ($risk_id) {
+                      case 'user-enumeration-via-author':
+                          $config[] = 'if ($arg_author ~ "^\d+$") {';
+                          $config[] = '    return 403;';
+                          $config[] = '}';
+                          break;
+
+                      case 'xmlrpc-brute-force':
+                          $config[] = 'location = /xmlrpc.php {';
+                          $config[] = '    deny all;';
+                          $config[] = '    access_log off;';
+                          $config[] = '    log_not_found off;';
+                          $config[] = '}';
+                          break;
+
+                      case 'wp-json-user-enumeration':
+                          $config[] = 'location ~ ^/wp-json/wp/v2/users {';
+                          $config[] = '    deny all;';
+                          $config[] = '}';
+                          break;
+
+                      case 'file-path-traversal':
+                          $config[] = 'if ($args ~* "\.\.\/|%2e%2e%2f|%252e%252e%252f") {';
+                          $config[] = '    return 403;';
+                          $config[] = '}';
+                          break;
+
+                      default:
+                          $config[] = "# Add custom rules for {$risk_id}";
+                          $config[] = 'add_header X-VAPT-Protection "active";';
+                          $config[] = "add_header X-VAPT-Risk-ID "{$risk_id}";";
+                  }
+              }
+
+              $config[] = "";
+              $config[] = "# End VAPT Protection: {$risk_id}";
+
+              return implode("\n", $config);
+          }
+
+          /**
+           * Get installation instructions
+           */
+          private function get_install_instructions($filepath) {
+              return [
+                  "1. Open your nginx configuration file (usually /etc/nginx/nginx.conf or /etc/nginx/sites-available/your-site)",
+                  "2. Add this line inside your server block:",
+                  "   include {$filepath};",
+                  "3. Test configuration: sudo nginx -t",
+                  "4. Reload nginx: sudo systemctl reload nginx",
+                  "",
+                  "Or copy the config content directly into your server block."
+              ];
+          }
+
+          /**
+           * Test nginx configuration
+           */
+          public function test_config() {
+              if (function_exists('exec')) {
+                  $output = [];
+                  $return_var = 0;
+                  @exec('nginx -t 2>&1', $output, $return_var);
+
+                  return [
+                      'valid' => ($return_var === 0),
+                      'output' => implode("\n", $output)
+                  ];
+              }
+
+              return [
+                  'valid' => null,
+                  'note' => 'Cannot test nginx config (exec not available)'
+              ];
+          }
+
+          /**
+           * Check if nginx config directory is writable
+           */
+          public function can_deploy() {
+              return wp_mkdir_p($this->config_dir);
+          }
+      }
+
+  - id: generate_php_deployer
+    name: "Generate PHP Functions Deployer (Universal Fallback)"
+    action: generate_file
+    target: "deployers/class-vapt-php-deployer.php"
+    condition: "{{source.has_php_fallback}}"
+
+    template: |
+      <?php
+      /**
+       * PHP Functions Deployer (Universal Fallback)
+       * Works on ANY WordPress installation
+       */
+
+      if (!defined('ABSPATH')) exit;
+
+      class VAPT_PHP_Deployer {
+          private $active_protections = [];
+
+          /**
+           * Deploy protection using WordPress hooks
+           */
+          public function deploy($risk_id, $implementation) {
+              $hooks = $implementation['implementation']['hooks'] ?? [];
+
+              if (empty($hooks)) {
+                  // Generate default hooks based on risk_id
+                  $hooks = $this->generate_default_hooks($risk_id);
+              }
+
+              foreach ($hooks as $hook_config) {
+                  $this->register_hook($risk_id, $hook_config);
+              }
+
+              $this->active_protections[] = $risk_id;
+
+              return [
+                  'status' => 'deployed',
+                  'platform' => 'php_functions',
+                  'risk_id' => $risk_id,
+                  'hooks_registered' => count($hooks),
+                  'universal' => true
+              ];
+          }
+
+          /**
+           * Generate default hooks for known risks
+           */
+          private function generate_default_hooks($risk_id) {
+              $hooks = [];
+
+              switch ($risk_id) {
+                  case 'user-enumeration-via-author':
+                      $hooks = [
+                          [
+                              'name' => 'init',
+                              'priority' => 1,
+                              'condition' => 'is_author_query_present',
+                              'action' => 'block_request'
+                          ],
+                          [
+                              'name' => 'parse_query',
+                              'priority' => 1,
+                              'condition' => 'is_author_archive_query',
+                              'action' => 'redirect_404'
+                          ]
+                      ];
+                      break;
+
+                  case 'xmlrpc-brute-force':
+                      $hooks = [
+                          [
+                              'name' => 'xmlrpc_enabled',
+                              'priority' => 10,
+                              'condition' => 'always',
+                              'action' => 'disable_xmlrpc'
+                          ]
+                      ];
+                      break;
+
+                  case 'wp-json-user-enumeration':
+                      $hooks = [
+                          [
+                              'name' => 'rest_api_init',
+                              'priority' => 10,
+                              'condition' => 'is_users_endpoint_unauthenticated',
+                              'action' => 'disable_users_endpoint'
+                          ]
+                      ];
+                      break;
+
+                  case 'login-credential-stuffing':
+                      $hooks = [
+                          [
+                              'name' => 'wp_authenticate_user',
+                              'priority' => 10,
+                              'condition' => 'always',
+                              'action' => 'rate_limit_login'
+                          ]
+                      ];
+                      break;
+
+                  default:
+                      // Generic protection
+                      $hooks = [
+                          [
+                              'name' => 'init',
+                              'priority' => 100,
+                              'condition' => 'always',
+                              'action' => 'add_security_headers'
+                          ]
+                      ];
+              }
+
+              return $hooks;
+          }
+
+          /**
+           * Register a WordPress hook
+           */
+          private function register_hook($risk_id, $hook_config) {
+              $hook_name = $hook_config['name'];
+              $priority = $hook_config['priority'] ?? 10;
+              $condition = $hook_config['condition'];
+              $action = $hook_config['action'];
+
+              add_action($hook_name, function() use ($risk_id, $condition, $action) {
+                  if ($this->evaluate_condition($condition)) {
+                      $this->execute_action($action, $risk_id);
+                  }
+              }, $priority);
+          }
+
+          /**
+           * Evaluate protection condition
+           */
+          private function evaluate_condition($condition) {
+              switch ($condition) {
+                  case 'always':
+                      return true;
+
+                  case 'is_author_query_present':
+                      return isset($_GET['author']) && is_numeric($_GET['author']);
+
+                  case 'is_author_archive_query':
+                      return is_author() && !is_user_logged_in();
+
+                  case 'is_users_endpoint_unauthenticated':
+                      return $this->is_rest_endpoint('users') && !is_user_logged_in();
+
+                  case 'is_xmlrpc_request':
+                      return defined('XMLRPC_REQUEST') && XMLRPC_REQUEST;
+
+                  case 'is_login_request':
+                      return isset($_POST['log']) && isset($_POST['pwd']);
+
+                  default:
+                      return apply_filters("vapt_condition_{$condition}", false);
+              }
+          }
+
+          /**
+           * Execute protection action
+           */
+          private function execute_action($action, $risk_id) {
+              switch ($action) {
+                  case 'block_request':
+                      status_header(403);
+                      header('X-VAPT-Protection: active');
+                      header("X-VAPT-Risk-ID: {$risk_id}");
+                      header('Content-Type: text/plain');
+                      exit('Access Denied - VAPT Protection Active');
+
+                  case 'redirect_404':
+                      global $wp_query;
+                      $wp_query->set_404();
+                      status_header(404);
+                      break;
+
+                  case 'disable_xmlrpc':
+                      add_filter('xmlrpc_enabled', '__return_false');
+                      break;
+
+                  case 'disable_users_endpoint':
+                      add_filter('rest_endpoints', function($endpoints) {
+                          unset($endpoints['/wp/v2/users']);
+                          unset($endpoints['/wp/v2/users/(?P<id>[\d]+)']);
+                          return $endpoints;
+                      });
+                      break;
+
+                  case 'rate_limit_login':
+                      // Implement rate limiting
+                      add_filter('wp_authenticate_user', function($user) {
+                          $ip = $_SERVER['REMOTE_ADDR'] ?? 'unknown';
+                          $transient = 'vapt_login_' . md5($ip);
+                          $attempts = get_transient($transient) ?: 0;
+
+                          if ($attempts > 5) {
+                              return new WP_Error('rate_limited', 'Too many login attempts. Please try again later.');
+                          }
+
+                          set_transient($transient, $attempts + 1, 300);
+                          return $user;
+                      });
+                      break;
+
+                  case 'add_security_headers':
+                      header('X-VAPT-Protection: active');
+                      header("X-VAPT-Risk-ID: {$risk_id}");
+                      break;
+
+                  default:
+                      do_action("vapt_action_{$action}", $risk_id);
+              }
+          }
+
+          /**
+           * Check if current request is a REST endpoint
+           */
+          private function is_rest_endpoint($endpoint) {
+              if (!defined('REST_REQUEST') || !REST_REQUEST) {
+                  return false;
+              }
+
+              $request_uri = $_SERVER['REQUEST_URI'] ?? '';
+              return strpos($request_uri, "/wp-json/wp/v2/{$endpoint}") !== false;
+          }
+
+          /**
+           * Always available - this is the universal fallback
+           */
+          public function can_deploy() {
+              return true;
+          }
+
+          /**
+           * Get deployment limitations
+           */
+          public function get_limitations() {
+              return [
+                  "Cannot block requests before WordPress loads",
+                  "Static file requests bypass PHP",
+                  "Slightly higher latency than server-level blocking",
+                  "Requires PHP execution for every request"
+              ];
+          }
+
+          /**
+           * Get mitigation strategies
+           */
+          public function get_mitigations() {
+              return [
+                  "Combine with object cache for minimal impact",
+                  "Use in conjunction with permalink structure",
+                  "Monitor via application logs",
+                  "Consider upgrading to server-level protection when possible"
+              ];
+          }
+      }
+
+# =============================================================================
+# PHASE 4: GENERATE DEPLOYMENT ORCHESTRATOR
+# =============================================================================
+
+  - id: generate_orchestrator
+    name: "Generate Deployment Orchestrator"
+    action: generate_file
+    target: "vapt-deployment-orchestrator.php"
+
+    template: |
+      <?php
+      /**
+       * VAPT Deployment Orchestrator v4.0.0
+       * Coordinates environment detection and protection deployment
+       */
+
+      if (!defined('ABSPATH')) exit;
+
+      require_once __DIR__ . '/vapt-environment-detector.php';
+      require_once __DIR__ . '/deployers/class-vapt-apache-deployer.php';
+      require_once __DIR__ . '/deployers/class-vapt-nginx-deployer.php';
+      require_once __DIR__ . '/deployers/class-vapt-php-deployer.php';
+
+      class VAPT_Deployment_Orchestrator {
+          private $detector;
+          private $deployers = [];
+          private $schema;
+          private $schema_path;
+
+          public function __construct($schema_path = null) {
+              $this->schema_path = $schema_path ?: $this->find_schema_file();
+              $this->load_schema();
+
+              $this->detector = new VAPT_Environment_Detector();
+
+              // Initialize deployers
+              $this->deployers = [
+                  'apache_htaccess' => new VAPT_Apache_Deployer(),
+                  'nginx_config' => new VAPT_Nginx_Deployer(),
+                  'php_functions' => new VAPT_PHP_Deployer(),
+                  'litespeed' => new VAPT_Apache_Deployer(), // LiteSpeed uses .htaccess
+                  'cloudflare_edge' => null // Placeholder for future implementation
+              ];
+          }
+
+          /**
+           * Find schema file in common locations
+           */
+          private function find_schema_file() {
+              $locations = [
+                  WP_CONTENT_DIR . '/vapt/interface_schema.json',
+                  WP_CONTENT_DIR . '/uploads/interface_schema.json',
+                  plugin_dir_path(__FILE__) . 'interface_schema.json',
+                  ABSPATH . 'interface_schema.json'
+              ];
+
+              foreach ($locations as $location) {
+                  if (file_exists($location)) {
+                      return $location;
+                  }
+              }
+
+              return null;
+          }
+
+          /**
+           * Load and validate schema
+           */
+          private function load_schema() {
+              if (!$this->schema_path || !file_exists($this->schema_path)) {
+                  throw new Exception('Schema file not found. Expected: interface_schema.json');
+              }
+
+              $content = file_get_contents($this->schema_path);
+              $this->schema = json_decode($content, true);
+
+              if (json_last_error() !== JSON_ERROR_NONE) {
+                  throw new Exception('Invalid JSON in schema file: ' . json_last_error_msg());
+              }
+          }
+
+          /**
+           * Deploy all protections
+           */
+          public function deploy_all($profile = 'auto_detect') {
+              $environment = $this->detector->detect();
+              $results = [];
+
+              $risk_interfaces = $this->schema['risk_interfaces'] ?? [];
+
+              foreach ($risk_interfaces as $risk) {
+                  $result = $this->deploy_risk($risk, $environment, $profile);
+                  $results[$risk['risk_id']] = $result;
+              }
+
+              // Store deployment results
+              update_option('vapt_deployment_results', $results);
+              update_option('vapt_last_deployment', time());
+
+              return $this->generate_deployment_report($results, $environment);
+          }
+
+          /**
+           * Deploy single risk
+           */
+          private function deploy_risk($risk, $environment, $profile) {
+              $risk_id = $risk['risk_id'];
+              $protection = $risk['protection_definition'] ?? [];
+              $implementations = $protection['implementations'] ?? [];
+
+              if (empty($implementations)) {
+                  return new WP_Error('no_implementations', "No implementations for risk: {$risk_id}");
+              }
+
+              // Select platform based on profile and environment
+              $platform = $this->select_platform($environment, $implementations, $profile);
+
+              if (!isset($this->deployers[$platform]) || $this->deployers[$platform] === null) {
+                  // Fall back to PHP functions
+                  $platform = 'php_functions';
+              }
+
+              $deployer = $this->deployers[$platform];
+
+              // Check if deployment is possible
+              if (!$deployer->can_deploy()) {
+                  // Try fallback
+                  if ($platform !== 'php_functions') {
+                      $platform = 'php_functions';
+                      $deployer = $this->deployers[$platform];
+                  }
+              }
+
+              $implementation = $implementations[$platform] ?? [];
+
+              // Execute deployment
+              $result = $deployer->deploy($risk_id, $implementation);
+
+              // Add metadata
+              if (!is_wp_error($result)) {
+                  $result['selected_platform'] = $platform;
+                  $result['fallback_used'] = ($platform === 'php_functions' && 
+                      isset($implementations['apache_htaccess']));
+              }
+
+              return $result;
+          }
+
+          /**
+           * Select optimal platform
+           */
+          private function select_platform($environment, $implementations, $profile) {
+              $selection_logic = $this->schema['global_config']['runtime_platform_selection']['decision_tree'] ?? [];
+
+              // Apply profile constraints
+              if ($profile === 'conservative') {
+                  // Only PHP and Apache .htaccess
+                  if (isset($implementations['apache_htaccess']) && 
+                      $this->deployers['apache_htaccess']->can_deploy()) {
+                      return 'apache_htaccess';
+                  }
+                  return 'php_functions';
+              }
+
+              if ($profile === 'maximum_protection') {
+                  // Deploy all layers - start with best available
+                  $tiers = ['cloudflare_edge', 'nginx_config', 'apache_htaccess', 'litespeed'];
+                  foreach ($tiers as $tier) {
+                      if (isset($implementations[$tier]) && 
+                          isset($this->deployers[$tier]) &&
+                          $this->deployers[$tier]->can_deploy()) {
+                          return $tier;
+                      }
+                  }
+              }
+
+              // Auto-detect using decision tree
+              foreach ($selection_logic as $step) {
+                  if (isset($step['if']) && isset($step['then'])) {
+                      if ($this->evaluate_decision_condition($step['if'], $environment)) {
+                          $selected = $step['then']['select'] ?? 'php_functions';
+
+                          // Map selection to actual deployer
+                          $platform_map = [
+                              'cloudflare_edge' => 'cloudflare_edge',
+                              'apache_htaccess' => 'apache_htaccess',
+                              'nginx_config' => 'nginx_config',
+                              'litespeed_htaccess' => 'litespeed',
+                              'php_functions' => 'php_functions'
+                          ];
+
+                          return $platform_map[$selected] ?? 'php_functions';
+                      }
+                  }
+              }
+
+              return 'php_functions';
+          }
+
+          /**
+           * Evaluate decision tree condition
+           */
+          private function evaluate_decision_condition($condition, $environment) {
+              // Parse conditions like "environment.cloudflare_edge.available"
+              if (preg_match('/environment\.(\w+)\.(\w+)/', $condition, $matches)) {
+                  $platform = $matches[1];
+                  $property = $matches[2];
+
+                  $capabilities = $environment['capabilities'] ?? [];
+
+                  if ($property === 'available') {
+                      return isset($capabilities[$platform]);
+                  }
+
+                  if ($property === 'writable' || $property === 'configured') {
+                      return isset($capabilities[$platform]) && 
+                             ($capabilities[$platform]['capabilities'][$property] ?? false);
+                  }
+              }
+
+              // Handle AND conditions
+              if (strpos($condition, ' AND ') !== false) {
+                  $parts = explode(' AND ', $condition);
+                  foreach ($parts as $part) {
+                      if (!$this->evaluate_decision_condition(trim($part), $environment)) {
+                          return false;
+                      }
+                  }
+                  return true;
+              }
+
+              return false;
+          }
+
+          /**
+           * Generate deployment report
+           */
+          private function generate_deployment_report($results, $environment) {
+              $stats = [
+                  'total' => count($results),
+                  'deployed' => 0,
+                  'fallback' => 0,
+                  'failed' => 0,
+                  'manual_install' => 0
+              ];
+
+              $platforms_used = [];
+
+              foreach ($results as $risk_id => $result) {
+                  if (is_wp_error($result)) {
+                      $stats['failed']++;
+                  } elseif (isset($result['status'])) {
+                      if ($result['status'] === 'deployed') {
+                          $stats['deployed']++;
+                          $platforms_used[] = $result['platform'] ?? 'unknown';
+
+                          if (!empty($result['fallback_used'])) {
+                              $stats['fallback']++;
+                          }
+                      } elseif ($result['status'] === 'manual_install_required') {
+                          $stats['manual_install']++;
+                      }
+                  }
+              }
+
+              return [
+                  'environment' => $environment,
+                  'statistics' => $stats,
+                  'platforms_used' => array_unique($platforms_used),
+                  'overall_status' => ($stats['failed'] === 0) ? 'success' : 'partial',
+                  'results' => $results,
+                  'timestamp' => time()
+              ];
+          }
+
+          /**
+           * Get deployment status
+           */
+          public function get_status() {
+              return [
+                  'schema_loaded' => !empty($this->schema),
+                  'schema_path' => $this->schema_path,
+                  'risk_count' => count($this->schema['risk_interfaces'] ?? []),
+                  'last_deployment' => get_option('vapt_last_deployment'),
+                  'deployers_available' => array_keys(array_filter($this->deployers))
+              ];
+          }
+
+          /**
+           * Undeploy all protections
+           */
+          public function undeploy_all() {
+              // This would require tracking what was deployed
+              // For now, just clear the options
+              delete_option('vapt_deployment_results');
+              delete_option('vapt_last_deployment');
+
+              return ['status' => 'undeployed', 'note' => 'Deployment records cleared'];
+          }
+      }
+
+# =============================================================================
+# PHASE 5: GENERATE WORDPRESS PLUGIN BOOTSTRAP
+# =============================================================================
+
+  - id: generate_plugin_bootstrap
+    name: "Generate WordPress Plugin Bootstrap"
+    action: generate_file
+    target: "vapt-security.php"
+
+    template: |
+      <?php
+      /**
+       * Plugin Name: VAPT Auto-Deploy Security
+       * Description: Auto-generated security protection from VAPT Interface Schema. Deploys {{source.risk_count}} risk protections.
+       * Version: 4.0.0
+       * Author: VAPT System
+       * Requires PHP: 7.4
+       * Requires at least: 5.8
+       */
+
+      if (!defined('ABSPATH')) exit;
+
+      define('VAPT_VERSION', '4.0.0');
+      define('VAPT_PLUGIN_DIR', plugin_dir_path(__FILE__));
+      define('VAPT_PLUGIN_URL', plugin_dir_url(__FILE__));
+
+      // Load core components
+      require_once VAPT_PLUGIN_DIR . 'vapt-environment-detector.php';
+      require_once VAPT_PLUGIN_DIR . 'vapt-deployment-orchestrator.php';
+
+      /**
+       * Main VAPT Security Class
+       */
+      class VAPT_Security {
+          private static $instance = null;
+          private $orchestrator;
+
+          public static function get_instance() {
+              if (self::$instance === null) {
+                  self::$instance = new self();
+              }
+              return self::$instance;
+          }
+
+          private function __construct() {
+              // Initialize on plugins loaded
+              add_action('plugins_loaded', [$this, 'init']);
+
+              // Activation/Deactivation hooks
+              register_activation_hook(__FILE__, [$this, 'activate']);
+              register_deactivation_hook(__FILE__, [$this, 'deactivate']);
+          }
+
+          /**
+           * Initialize plugin
+           */
+          public function init() {
+              // Load admin interface
+              if (is_admin()) {
+                  require_once VAPT_PLUGIN_DIR . 'vapt-admin-interface.php';
+                  new VAPT_Admin();
+              }
+
+              // Auto-deploy on init if enabled
+              $auto_deploy = get_option('vapt_auto_deploy', true);
+              if ($auto_deploy && !get_option('vapt_deployment_results')) {
+                  $this->auto_deploy();
+              }
+          }
+
+          /**
+           * Plugin activation
+           */
+          public function activate() {
+              // Create necessary directories
+              wp_mkdir_p(WP_CONTENT_DIR . '/vapt-backups');
+              wp_mkdir_p(WP_CONTENT_DIR . '/vapt-nginx-configs');
+
+              // Set default options
+              add_option('vapt_auto_deploy', true);
+              add_option('vapt_deployment_profile', 'auto_detect');
+
+              // Run initial deployment
+              $this->auto_deploy();
+          }
+
+          /**
+           * Plugin deactivation
+           */
+          public function deactivate() {
+              // Optionally undeploy protections
+              // $this->orchestrator->undeploy_all();
+          }
+
+          /**
+           * Auto-deploy protections
+           */
+          private function auto_deploy() {
+              try {
+                  $this->orchestrator = new VAPT_Deployment_Orchestrator();
+                  $profile = get_option('vapt_deployment_profile', 'auto_detect');
+                  $result = $this->orchestrator->deploy_all($profile);
+
+                  update_option('vapt_auto_deploy_result', $result);
+
+                  return $result;
+              } catch (Exception $e) {
+                  error_log('VAPT Auto-Deploy Error: ' . $e->getMessage());
+                  return new WP_Error('deploy_failed', $e->getMessage());
+              }
+          }
+
+          /**
+           * Get orchestrator instance
+           */
+          public function get_orchestrator() {
+              if (!$this->orchestrator) {
+                  $this->orchestrator = new VAPT_Deployment_Orchestrator();
+              }
+              return $this->orchestrator;
+          }
+      }
+
+      // Initialize
+      VAPT_Security::get_instance();
+
+      /**
+       * Helper function for external access
+       */
+      function vapt_get_deployment_status() {
+          return get_option('vapt_deployment_results', []);
+      }
+
+      function vapt_trigger_deployment($profile = 'auto_detect') {
+          $vapt = VAPT_Security::get_instance();
+          return $vapt->get_orchestrator()->deploy_all($profile);
+      }
+
+# =============================================================================
+# PHASE 6: GENERATE ADMIN INTERFACE
+# =============================================================================
+
+  - id: generate_admin_interface
+    name: "Generate WordPress Admin Interface"
+    action: generate_file
+    target: "vapt-admin-interface.php"
+
+    template: |
+      <?php
+      /**
+       * VAPT Admin Dashboard
+       */
+
+      if (!defined('ABSPATH')) exit;
+
+      class VAPT_Admin {
+          private $orchestrator;
+
+          public function __construct() {
+              add_action('admin_menu', [$this, 'add_menu']);
+              add_action('admin_init', [$this, 'handle_actions']);
+              add_action('admin_enqueue_scripts', [$this, 'enqueue_assets']);
+          }
+
+          /**
+           * Add admin menu
+           */
+          public function add_menu() {
+              add_menu_page(
+                  'VAPT Security',
+                  'VAPT Security',
+                  'manage_options',
+                  'vapt-security',
+                  [$this, 'render_dashboard'],
+                  'dashicons-shield-alt',
+                  80
+              );
+          }
+
+          /**
+           * Enqueue admin assets
+           */
+          public function enqueue_assets($hook) {
+              if ($hook !== 'toplevel_page_vapt-security') return;
+
+              wp_enqueue_style('vapt-admin', VAPT_PLUGIN_URL . 'assets/admin.css', [], VAPT_VERSION);
+              wp_enqueue_script('vapt-admin', VAPT_PLUGIN_URL . 'assets/admin.js', ['jquery'], VAPT_VERSION, true);
+          }
+
+          /**
+           * Handle admin actions
+           */
+          public function handle_actions() {
+              if (!isset($_POST['vapt_action'])) return;
+
+              check_admin_referer('vapt_admin_action');
+
+              $action = sanitize_text_field($_POST['vapt_action']);
+
+              switch ($action) {
+                  case 'deploy':
+                      $profile = sanitize_text_field($_POST['profile'] ?? 'auto_detect');
+                      $this->run_deployment($profile);
+                      break;
+
+                  case 'redetect':
+                      $detector = new VAPT_Environment_Detector();
+                      $detector->redetect();
+                      wp_redirect(admin_url('admin.php?page=vapt-security&redetected=1'));
+                      exit;
+
+                  case 'clear_cache':
+                      delete_transient('vapt_environment_profile');
+                      wp_redirect(admin_url('admin.php?page=vapt-security&cache_cleared=1'));
+                      exit;
+              }
+          }
+
+          /**
+           * Run deployment
+           */
+          private function run_deployment($profile) {
+              try {
+                  $this->orchestrator = new VAPT_Deployment_Orchestrator();
+                  $result = $this->orchestrator->deploy_all($profile);
+
+                  set_transient('vapt_last_deployment_result', $result, HOUR_IN_SECONDS);
+
+                  wp_redirect(admin_url('admin.php?page=vapt-security&deployed=1'));
+                  exit;
+              } catch (Exception $e) {
+                  wp_redirect(admin_url('admin.php?page=vapt-security&error=' . urlencode($e->getMessage())));
+                  exit;
+              }
+          }
+
+          /**
+           * Render dashboard
+           */
+          public function render_dashboard() {
+              $detector = new VAPT_Environment_Detector();
+              $env = $detector->detect();
+              $deployment = get_option('vapt_deployment_results', []);
+              $last_result = get_transient('vapt_last_deployment_result');
+              ?>
+              <div class="wrap vapt-dashboard">
+                  <h1>🔒 VAPT Security Protection</h1>
+
+                  <?php if (isset($_GET['deployed'])): ?>
+                      <div class="notice notice-success">
+                          <p>Protection deployment completed successfully!</p>
+                      </div>
+                  <?php endif; ?>
+
+                  <?php if (isset($_GET['error'])): ?>
+                      <div class="notice notice-error">
+                          <p>Error: <?php echo esc_html($_GET['error']); ?></p>
+                      </div>
+                  <?php endif; ?>
+
+                  <!-- Environment Status Card -->
+                  <div class="vapt-card">
+                      <h2>Environment Detection</h2>
+                      <table class="widefat vapt-table">
+                          <tr>
+                              <td>Optimal Platform</td>
+                              <td>
+                                  <span class="vapt-badge vapt-badge-<?php echo esc_attr($env['optimal_platform']); ?>">
+                                      <?php echo esc_html($env['optimal_platform']); ?>
+                                  </span>
+                              </td>
+                          </tr>
+                          <tr>
+                              <td>Platform Tier</td>
+                              <td><?php echo esc_html($env['platform_tier']); ?></td>
+                          </tr>
+                          <tr>
+                              <td>Available Capabilities</td>
+                              <td><?php echo esc_html(implode(', ', array_keys($env['capabilities'] ?? []))); ?></td>
+                          </tr>
+                          <tr>
+                              <td>Detection Version</td>
+                              <td><?php echo esc_html($env['detection_version'] ?? 'unknown'); ?></td>
+                          </tr>
+                      </table>
+                  </div>
+
+                  <!-- Deployment Status -->
+                  <div class="vapt-card">
+                      <h2>Deployment Status</h2>
+                      <?php if (!empty($deployment)): ?>
+                          <table class="widefat vapt-table">
+                              <tr>
+                                  <td>Total Risks</td>
+                                  <td><?php echo count($deployment); ?></td>
+                              </tr>
+                              <tr>
+                                  <td>Last Deployment</td>
+                                  <td><?php echo human_time_diff(get_option('vapt_last_deployment', 0), time()) . ' ago'; ?></td>
+                              </tr>
+                          </table>
+                      <?php else: ?>
+                          <p>No deployments yet. Use the form below to deploy protections.</p>
+                      <?php endif; ?>
+                  </div>
+
+                  <!-- Deployment Actions -->
+                  <div class="vapt-card">
+                      <h2>Deploy Protections</h2>
+                      <form method="post">
+                          <?php wp_nonce_field('vapt_admin_action'); ?>
+                          <input type="hidden" name="vapt_action" value="deploy">
+
+                          <table class="form-table">
+                              <tr>
+                                  <th>Deployment Profile</th>
+                                  <td>
+                                      <select name="profile">
+                                          <option value="auto_detect">Auto-Detect (Recommended)</option>
+                                          <option value="maximum_protection">Maximum Protection (All Layers)</option>
+                                          <option value="conservative">Conservative (Shared Hosting Safe)</option>
+                                          <option value="enterprise">Enterprise Multi-Layer</option>
+                                      </select>
+                                      <p class="description">
+                                          Auto-Detect automatically selects the best protection for your environment.
+                                      </p>
+                                  </td>
+                              </tr>
+                          </table>
+
+                          <?php submit_button('Deploy All Protections', 'primary', 'submit', false); ?>
+                      </form>
+                  </div>
+
+                  <!-- Quick Actions -->
+                  <div class="vapt-card">
+                      <h2>Quick Actions</h2>
+                      <form method="post" style="display:inline;">
+                          <?php wp_nonce_field('vapt_admin_action'); ?>
+                          <input type="hidden" name="vapt_action" value="redetect">
+                          <?php submit_button('Redetect Environment', 'secondary', 'submit', false); ?>
+                      </form>
+
+                      <form method="post" style="display:inline; margin-left: 10px;">
+                          <?php wp_nonce_field('vapt_admin_action'); ?>
+                          <input type="hidden" name="vapt_action" value="clear_cache">
+                          <?php submit_button('Clear Detection Cache', 'secondary', 'submit', false); ?>
+                      </form>
+                  </div>
+
+              </div>
+
+              <style>
+                  .vapt-dashboard { max-width: 800px; }
+                  .vapt-card {
+                      background: #fff;
+                      border: 1px solid #ccd0d4;
+                      box-shadow: 0 1px 1px rgba(0,0,0,.04);
+                      padding: 20px;
+                      margin: 20px 0;
+                  }
+                  .vapt-card h2 { margin-top: 0; }
+                  .vapt-table { margin-top: 15px; }
+                  .vapt-badge {
+                      display: inline-block;
+                      padding: 3px 8px;
+                      border-radius: 3px;
+                      font-size: 12px;
+                      font-weight: bold;
+                      text-transform: uppercase;
+                  }
+                  .vapt-badge-cloudflare_edge { background: #f48120; color: #fff; }
+                  .vapt-badge-nginx_config { background: #009639; color: #fff; }
+                  .vapt-badge-apache_htaccess { background: #b21e28; color: #fff; }
+                  .vapt-badge-php_functions { background: #777bb4; color: #fff; }
+                  .vapt-badge-litespeed { background: #00a4e4; color: #fff; }
+              </style>
+              <?php
+          }
+      }
+
+# =============================================================================
+# PHASE 7: FINAL OUTPUT GENERATION
+# =============================================================================
+
+  - id: generate_output_package
+    name: "Generate WordPress Plugin Package"
+    action: output
+
+    output:
+      format: "zip"
+      filename: "vapt-security-plugin-{{timestamp}}.zip"
+      structure:
+        root: "vapt-security/"
+        files:
+          - "vapt-security.php"
+          - "vapt-environment-detector.php"
+          - "vapt-deployment-orchestrator.php"
+          - "vapt-admin-interface.php"
+          - "readme.txt"
+        directories:
+          deployers/:
+            - "deployers/class-vapt-apache-deployer.php"
+            - "deployers/class-vapt-nginx-deployer.php"
+            - "deployers/class-vapt-php-deployer.php"
+          assets/:
+            - "assets/admin.css"
+            - "assets/admin.js"
+
+    post_generate:
+      - action: "create_readme"
+        content: |
+          === VAPT Auto-Deploy Security ===
+          Contributors: vapt-system
+          Tags: security, vapt, firewall, protection, wordpress-security
+          Requires at least: 5.8
+          Tested up to: 6.4
+          Requires PHP: 7.4
+          Stable tag: 4.0.0
+          License: GPLv2 or later
+
+          Auto-generated security protection from VAPT Interface Schema. Deploys {{source.risk_count}} risk protections.
+
+          == Description ==
+
+          This plugin automatically deploys security protections based on the VAPT (Vulnerability Assessment and Penetration Testing) Interface Schema.
+
+          Features:
+          * Runtime environment detection (Apache, Nginx, LiteSpeed, Cloudflare)
+          * Automatic platform selection for optimal protection
+          * Universal PHP fallback for any hosting environment
+          * One-click deployment from WordPress admin
+          * Protection against {{source.risk_count}} security risks
+
+          == Installation ==
+
+          1. Upload the plugin files to `/wp-content/plugins/vapt-security`
+          2. Activate the plugin through the 'Plugins' menu in WordPress
+          3. Go to 'VAPT Security' in the admin menu
+          4. Click 'Deploy All Protections'
+
+          == Changelog ==
+
+          = 4.0.0 =
+          * Initial release
+          * Auto-generated from interface schema
+          * Multi-platform deployment support
+
+      - action: "log_completion"
+        message: |
+          VAPT Feature Deployment Rule completed successfully.
+          Generated WordPress plugin with {{source.risk_count}} protections.
+          Platforms supported: {{source.platforms_available}}
+
+          Next steps:
+          1. Install the generated plugin in WordPress
+          2. Navigate to VAPT Security admin page
+          3. Click "Deploy All Protections"
+          4. Verify protections are active
+
+# =============================================================================
+# VALIDATION RULES
+# =============================================================================
+
+  - id: validate_deployment_readiness
+    name: "Validate Deployment Readiness"
+    action: validate
+
+    validate:
+      checks:
+        - "{{files.vapt-environment-detector.php}} exists"
+        - "{{files.vapt-deployment-orchestrator.php}} exists"
+        - "{{files.vapt-security.php}} exists"
+        - "{{files.deployers/class-vapt-php-deployer.php}} exists"
+
+    on_pass:
+      - set: ["$.deployment_status", "READY"]
+      - log: "All deployment components generated successfully"
+
+    on_fail:
+      - set: ["$.deployment_status", "INCOMPLETE"]
+      - warn: "Some deployment components are missing. Review generation logs."

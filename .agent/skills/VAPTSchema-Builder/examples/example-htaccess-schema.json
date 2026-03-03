@@ -1,0 +1,27 @@
+{
+  "controls": [
+    {
+      "type": "toggle",
+      "label": "Enable xmlrpc.php Protection",
+      "key": "UI-RISK-002-001",
+      "default": true
+    },
+    {
+      "type": "test_action",
+      "label": "Verify xmlrpc.php",
+      "key": "verify_xmlrpc",
+      "test_logic": "universal_probe",
+      "test_config": {
+        "method": "POST",
+        "path": "/xmlrpc.php",
+        "expected_status": 403
+      }
+    }
+  ],
+  "enforcement": {
+    "driver": "htaccess",
+    "mappings": {
+      "UI-RISK-002-001": "<Files xmlrpc.php>\nOrder Deny,Allow\nDeny from all\n</Files>"
+    }
+  }
+}

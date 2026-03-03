@@ -1,0 +1,25 @@
+# Example Correction: v1.2 .htaccess Rewrite Block
+# Risk: RISK-003 (Username Enumeration)
+
+# [WRONG] v1.0 Style (Dead Zone)
+# # BEGIN VAPT RISK-003
+# RewriteRule ^wp-json/wp/v2/users$ - [F,L]
+# # END VAPT RISK-003
+# ... usually placed at end of file, AFTER # END WordPress ...
+
+# [CORRECT] v1.2 Style (Safe & Robust)
+# Position: BEFORE # BEGIN WordPress
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    # BEGIN VAPT RISK-003 - Username Enumeration via WordPress REST API
+    RewriteRule ^wp-json/wp/v2/users$ - [F,L]
+    RewriteRule ^wp-json/wp/v2/users/ - [F,L]
+    # END VAPT RISK-003
+</IfModule>
+
+# Notes:
+# 1. Wrapped in <IfModule> to prevent 500 errors if mod_rewrite is missing.
+# 2. RewriteBase / ensures compatibility with subdirectory installs.
+# 3. Placed BEFORE WordPress block to avoid the [L] flag "dead zone".
+# 4. Covers both exact and trailing slash paths.

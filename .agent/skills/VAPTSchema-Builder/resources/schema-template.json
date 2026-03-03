@@ -1,0 +1,27 @@
+{
+  "controls": [
+    {
+      "type": "toggle",
+      "label": "Enable [Feature Name] Protection",
+      "key": "UI-RISK-XXX-YYY",
+      "default": true
+    },
+    {
+      "type": "test_action",
+      "label": "Verify Protection",
+      "key": "verify_risk_xxx",
+      "test_logic": "universal_probe",
+      "test_config": {
+        "method": "GET",
+        "path": "/target-path",
+        "expected_status": 403
+      }
+    }
+  ],
+  "enforcement": {
+    "driver": "htaccess_or_wpconfig_or_hook",
+    "mappings": {
+      "UI-RISK-XXX-YYY": "MAPPED_DIRECTIVE_OR_HOOK"
+    }
+  }
+}

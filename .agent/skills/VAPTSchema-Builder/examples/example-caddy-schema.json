@@ -1,0 +1,27 @@
+{
+  "controls": [
+    {
+      "type": "toggle",
+      "label": "Enable Caddy Rate Limiting",
+      "key": "UI-RISK-012-001",
+      "default": true
+    },
+    {
+      "type": "test_action",
+      "label": "Verify Rate Limit",
+      "key": "verify_caddy_limit",
+      "test_logic": "spam_requests",
+      "test_config": {
+        "method": "GET",
+        "path": "/wp-login.php",
+        "rpm": 10
+      }
+    }
+  ],
+  "enforcement": {
+    "driver": "caddy",
+    "mappings": {
+      "UI-RISK-012-001": "rate_limit {\n  zone login {\n    key {remote_ip}\n    events 10\n    window 1m\n  }\n}"
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "group_id": "sensitive_files",
+  "target_file": "{ABSPATH}.htaccess",
+  "begin_marker": "# BEGIN VAPT_SENSITIVE_FILES",
+  "end_marker": "# END VAPT_SENSITIVE_FILES",
+  "merge_strategy": "files_match_union",
+  "rules": {
+    "files_match": [
+      "^\\.env",
+      "wp-config\\.php",
+      "composer\\.(json|lock)",
+      "readme\\.html",
+      "license\\.txt",
+      "debug\\.log",
+      "\\.(bak|old|sql)$",
+      "^\\.git"
+    ]
+  }
+}
