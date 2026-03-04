@@ -68,10 +68,25 @@ class VAPTSECURE_Hook_Driver
       $resolved_data = array_merge($resolved_data, $impl_data);
     }
 
-    // 2. TWO-WAY STRATEGY: Strictly check 'enabled' toggle
-    $is_enabled = isset($resolved_data['enabled']) ? (bool)$resolved_data['enabled'] : true;
+    // 2. TWO-WAY STRATEGY: Strictly check 'enabled' or 'feat_enabled' toggle (v3.13.20)
+    $is_enabled = true;
+    if (isset($resolved_data['enabled'])) {
+      $is_enabled = (bool)$resolved_data['enabled'];
+    } elseif (isset($resolved_data['feat_enabled'])) {
+      $is_enabled = (bool)$resolved_data['feat_enabled'];
+    } else {
+      // Check mapped toggles (v3.13.20)
+      $mappings = $schema['enforcement']['mappings'] ?? [];
+      foreach ($mappings as $mapped_key => $directive) {
+        if (isset($resolved_data[$mapped_key]) && ($resolved_data[$mapped_key] === false || $resolved_data[$mapped_key] === 0 || $resolved_data[$mapped_key] === '0')) {
+          $is_enabled = false;
+          break;
+        }
+      }
+    }
+
     if (!$is_enabled) {
-      file_put_contents($log_file, $log . "Deactivated: Feature is explicitly disabled in UI.\n", FILE_APPEND);
+      file_put_contents($log_file, $log . "Deactivated: Feature is explicitly disabled in UI (feat_enabled/enabled).\n", FILE_APPEND);
       return; // Stop enforcement
     }
 

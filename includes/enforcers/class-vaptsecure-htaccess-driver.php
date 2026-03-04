@@ -55,10 +55,12 @@ class VAPTSECURE_Htaccess_Driver
   {
     $enf_config = isset($schema['enforcement']) ? $schema['enforcement'] : array();
 
-    // 🛡️ TWO-WAY DEACTIVATION (v3.12.3 - Intelligent Detection)
+    // 🛡️ TWO-WAY DEACTIVATION (v3.13.20 - Intelligent Detection)
     $is_enabled = true;
     if (isset($data['enabled'])) {
       $is_enabled = (bool)$data['enabled'];
+    } elseif (isset($data['feat_enabled'])) {
+      $is_enabled = (bool)$data['feat_enabled'];
     } else {
       // If 'enabled' is missing, check if any mapped toggle is set to false
       $mappings = $enf_config['mappings'] ?? array();

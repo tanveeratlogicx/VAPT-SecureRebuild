@@ -125,14 +125,17 @@
         }
       }
 
-      if (vaptEnforced === 'php-headers' || vaptEnforced === 'htaccess') {
+      if (vaptEnforced === 'php-headers' || vaptEnforced === 'htaccess' || vaptEnforced?.includes('php')) {
         if (featureKey && enforcedFeature) {
-          const features = enforcedFeature.split(',').map(f => f.trim());
-          if (!features.includes(featureKey)) {
-            return { success: false, message: `Inconclusive: Headers are present, but this specific feature ('${featureKey}') is not listed in enforcement. Found: ${enforcedFeature}.`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n${headerStr.trim()}` };
+          const activeFeatures = enforcedFeature.split(',').map(f => f.trim());
+          if (activeFeatures.includes(featureKey)) {
+            return { success: true, message: `Plugin is actively enforcing headers (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
+          } else {
+            return { success: false, message: `Discrepancy: Global headers found, but this specific feature ('${featureKey}') is NOT active.`, raw: `URL: ${url} | Status: ${response.status} | Active Features: ${enforcedFeature}\n\n${headerStr.trim()}` };
           }
         }
-        return { success: true, message: `Plugin is actively enforcing headers (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
+        // If no feature list is provided, we can only verify global enforcement
+        return { success: true, message: `Global security headers detected (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
       }
 
       return { success: false, message: `Security headers present, but NOT by this plugin. VAPT enforcement header missing.`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
