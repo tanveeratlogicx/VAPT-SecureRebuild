@@ -153,43 +153,71 @@
         { label: __('Risk Blocked (24h)', 'vaptsecure'), value: securityStats.blocks_24h, icon: 'warning', color: '#dc2626' }
       ];
 
-      return el('div', { className: 'vapt-stats-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '20px', marginBottom: '30px' } },
-        stats.map((s, idx) => el('div', { key: idx, className: 'vapt-stat-card premium', style: { background: 'white', padding: '20px', borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' } }, [
-          el('div', { style: { display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '10px' } }, [
-            el(Icon, { icon: s.icon, size: 20, style: { color: s.color } }),
-            el('span', { style: { fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' } }, s.label)
+      return el('div', { className: 'vapt-stats-grid', style: { display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '25px', marginBottom: '35px' } },
+        stats.map((s, idx) => el('div', {
+          key: idx,
+          className: 'vapt-stat-card premium',
+          style: {
+            background: 'white',
+            padding: '25px',
+            borderRadius: '16px',
+            border: '1px solid #f1f5f9',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05)'
+          }
+        }, [
+          el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '15px' } }, [
+            el('div', { style: { padding: '8px', background: `${s.color}10`, borderRadius: '10px' } },
+              el(Icon, { icon: s.icon, size: 20, style: { color: s.color } })
+            ),
+            el('span', { style: { fontSize: '11px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' } }, s.label)
           ]),
-          el('div', { style: { fontSize: '24px', fontWeight: 800, color: '#1e293b' } }, s.value)
+          el('div', { style: { fontSize: '28px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.025em' } }, s.value)
         ]))
       );
     };
 
     const LiveSecurityLogs = () => {
-      return el('div', { className: 'vapt-log-card', style: { background: 'white', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden', boxShadow: '0 1px 3px rgba(0,0,0,0.05)' } }, [
-        el('div', { style: { padding: '15px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
-          el('h3', { style: { margin: 0, fontSize: '14px', fontWeight: 700, color: '#1e293b' } }, __('Live Security Log', 'vaptsecure')),
+      return el('div', { className: 'vapt-log-card premium', style: { background: 'white', borderRadius: '16px', border: '1px solid #f1f5f9', overflow: 'hidden', boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.05)' } }, [
+        el('div', { style: { padding: '20px 25px', borderBottom: '1px solid #f1f5f9', background: '#fff', display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
+          el('h3', { style: { margin: 0, fontSize: '15px', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' } }, [
+            el(Icon, { icon: 'list-view', size: 18, style: { color: '#64748b' } }),
+            __('Live Security Monitoring', 'vaptsecure')
+          ]),
           el('div', { style: { display: 'flex', alignItems: 'center', gap: '15px' } }, [
             logsLoading && el(Spinner, { size: 16 }),
-            el('span', { className: 'vapt-live-indicator', style: { display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: '#10b981', fontWeight: 600 } }, [
-              el('span', { className: 'pulse-dot' }), __('Live Monitoring Active', 'vaptsecure')
+            el('span', { style: { display: 'flex', alignItems: 'center', gap: '8px', fontSize: '12px', color: '#10b981', fontWeight: 700, background: '#f0fdf4', padding: '4px 12px', borderRadius: '20px' } }, [
+              el('span', { className: 'pulse-dot', style: { width: '8px', height: '8px', background: '#10b981', borderRadius: '50%', boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.2)' } }),
+              __('Live', 'vaptsecure')
             ])
           ])
         ]),
-        el('table', { style: { width: '100%', borderCollapse: 'collapse' } }, [
-          el('thead', null, el('tr', null, [
-            [__('Time', 'vaptsecure'), __('Risk ID', 'vaptsecure'), __('Event', 'vaptsecure'), __('Source IP', 'vaptsecure'), __('Status', 'vaptsecure')].map(h => el('th', { key: h, style: { textAlign: 'left', padding: '12px 20px', fontSize: '11px', fontWeight: 700, color: '#64748b', background: '#fcfcfd', textTransform: 'uppercase' } }, h))
-          ])),
-          el('tbody', null, securityLogs.length === 0 ? el('tr', null, el('td', { colSpan: 5, style: { padding: '40px', textAlign: 'center', color: '#94a3b8', fontSize: '13px' } }, __('No security events recorded yet.', 'vaptsecure'))) :
-            securityLogs.map((log, i) => {
-              const details = JSON.parse(log.details || '{}');
-              return el('tr', { key: log.id, style: { borderBottom: '1px solid #f1f5f9' } }, [
-                el('td', { style: { padding: '12px 20px', fontSize: '12px', color: '#64748b' } }, log.created_at),
-                el('td', { style: { padding: '12px 20px', fontSize: '12px', fontWeight: 700, color: '#1e293b' } }, log.feature_key),
-                el('td', { style: { padding: '12px 20px', fontSize: '12px', color: '#475569' } }, details.type || log.event_type),
-                el('td', { style: { padding: '12px 20px', fontSize: '12px', color: '#64748b', fontFamily: 'monospace' } }, log.ip_address),
-                el('td', { style: { padding: '12px 20px' } }, el('span', { className: 'status-badge', style: { background: '#fee2e2', color: '#dc2626' } }, log.event_type))
-              ]);
-            }))
+        el('div', { style: { overflowX: 'auto' } }, [
+          el('table', { style: { width: '100%', borderCollapse: 'collapse', minWidth: '600px' } }, [
+            el('thead', null, el('tr', null, [
+              [__('Time'), __('Risk ID'), __('Event'), __('Source IP'), __('Status')].map(h => el('th', { key: h, style: { textAlign: 'left', padding: '15px 25px', fontSize: '11px', fontWeight: 800, color: '#64748b', background: '#f8fafc', textTransform: 'uppercase', letterSpacing: '0.05em' } }, h))
+            ])),
+            el('tbody', null, securityLogs.length === 0 ? el('tr', null, el('td', { colSpan: 5, style: { padding: '60px', textAlign: 'center', color: '#94a3b8', fontSize: '14px', fontStyle: 'italic' } }, __('No security events detected yet.', 'vaptsecure'))) :
+              securityLogs.map((log, i) => {
+                const details = JSON.parse(log.details || '{}');
+                return el('tr', { key: log.id, style: { borderBottom: '1px solid #f1f5f9', transition: 'background 0.2s' } }, [
+                  el('td', { style: { padding: '15px 25px', fontSize: '13px', color: '#64748b', fontWeight: 500 } }, log.created_at),
+                  el('td', { style: { padding: '15px 25px', fontSize: '13px', fontWeight: 700, color: '#0f172a' } }, log.feature_key),
+                  el('td', { style: { padding: '15px 25px', fontSize: '13px', color: '#334155', fontWeight: 500 } }, details.type || log.event_type),
+                  el('td', { style: { padding: '15px 25px', fontSize: '13px', color: '#64748b', fontFamily: 'monospace', fontWeight: 600 } }, log.ip_address),
+                  el('td', { style: { padding: '15px 25px' } }, el('span', {
+                    style: {
+                      fontSize: '10px',
+                      fontWeight: 800,
+                      padding: '4px 10px',
+                      borderRadius: '6px',
+                      background: '#fee2e2',
+                      color: '#b91c1c',
+                      textTransform: 'uppercase'
+                    }
+                  }, __('Blocked', 'vaptsecure')))
+                ]);
+              }))
+          ])
         ])
       ]);
     };
@@ -203,42 +231,54 @@
       // Sidebar
       el('aside', { className: 'vapt-client-sidebar', style: { width: '280px', background: 'white', borderRight: '1px solid #e2e8f0', display: 'flex', flexDirection: 'column' } }, [
 
-        el('div', { className: 'sidebar-menu', style: { padding: '20px', flexGrow: 1 } }, [
-          el('div', { style: { fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '15px', paddingLeft: '10px' } }, __('Protection Status')),
-          severityConfigs.map(item => el('button', {
+        el('div', { className: 'sidebar-menu', style: { padding: '25px', flexGrow: 1 } }, [
+          el('div', { style: { fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '20px', paddingLeft: '10px' } }, __('Protection Status')),
+          [
+            { id: 'all', label: __('All Features'), icon: 'shield', count: features.length },
+            { id: 'high', label: __('High Severity'), icon: 'warning', count: features.filter(f => f.severity === 'HIGH').length, color: '#ef4444' },
+            { id: 'medium', label: __('Medium'), icon: 'flag', count: features.filter(f => f.severity === 'MEDIUM').length, color: '#f59e0b' }
+          ].map(item => el('div', {
             key: item.id,
             onClick: () => setActiveTab(item.id),
-            className: `menu-item ${activeTab === item.id ? 'active' : ''}`,
             style: {
-              width: '100%', border: 'none', background: activeTab === item.id ? '#eff6ff' : 'transparent',
-              color: activeTab === item.id ? '#1d4ed8' : '#475569',
-              padding: '12px 15px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left',
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '4px',
-              transition: 'all 0.2s ease'
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              marginBottom: '6px',
+              background: activeTab === item.id ? '#f1f5f9' : 'transparent',
+              color: activeTab === item.id ? '#0f172a' : '#64748b',
+              fontWeight: activeTab === item.id ? 700 : 500,
+              transition: 'all 0.2s'
             }
           }, [
-            el('span', { style: { display: 'flex', alignItems: 'center', gap: '10px', fontSize: '14px', fontWeight: activeTab === item.id ? 700 : 500 } }, [
-              el(Icon, { icon: item.icon, size: 18, style: { color: activeTab === item.id ? '#1d4ed8' : (item.color || '#94a3b8') } }),
+            el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
+              el(Icon, { icon: item.icon, size: 18, style: { color: activeTab === item.id ? (item.color || '#0ea5e9') : '#94a3b8' } }),
               item.label
             ]),
-            item.count > 0 && el('span', { style: { fontSize: '10px', background: activeTab === item.id ? '#1d4ed8' : '#e2e8f0', color: activeTab === item.id ? 'white' : '#64748b', padding: '2px 8px', borderRadius: '10px', fontWeight: 700 } }, item.count)
+            item.count > 0 && el('span', { style: { fontSize: '10px', background: activeTab === item.id ? '#fff' : '#f1f5f9', padding: '2px 8px', borderRadius: '10px', fontWeight: 700, border: '1px solid #e2e8f0' } }, item.count)
           ])),
 
-          el('div', { style: { margin: '30px 0 15px', borderTop: '1px solid #f1f5f9', paddingTop: '20px' } }),
-          el('div', { style: { fontSize: '10px', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '15px', paddingLeft: '10px' } }, __('Security Insights')),
-
-          el('button', {
+          el('div', { style: { fontSize: '10px', fontWeight: 800, color: '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.1em', marginTop: '35px', marginBottom: '20px', paddingLeft: '10px' } }, __('Security Insights')),
+          el('div', {
             onClick: () => setActiveTab('stats'),
-            className: `menu-item ${activeTab === 'stats' ? 'active' : ''}`,
             style: {
-              width: '100%', border: 'none', background: activeTab === 'stats' ? 'linear-gradient(135deg, #1d4ed8 0%, #2563eb 100%)' : 'transparent',
-              color: activeTab === 'stats' ? 'white' : '#475569',
-              padding: '12px 15px', borderRadius: '8px', cursor: 'pointer', textAlign: 'left',
-              display: 'flex', alignItems: 'center', gap: '10px', transition: 'all 0.2s ease', boxShadow: activeTab === 'stats' ? '0 4px 12px rgba(29, 78, 216, 0.25)' : 'none'
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '12px 14px',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              background: activeTab === 'stats' ? '#f1f5f9' : 'transparent',
+              color: activeTab === 'stats' ? '#0f172a' : '#64748b',
+              fontWeight: activeTab === 'stats' ? 700 : 500,
+              transition: 'all 0.2s'
             }
           }, [
-            el(Icon, { icon: 'chart-bar', size: 18 }),
-            el('span', { style: { fontSize: '14px', fontWeight: activeTab === 'stats' ? 700 : 500 } }, __('Stats & Live Logs', 'vaptsecure'))
+            el(Icon, { icon: 'chart-bar', size: 18, style: { color: activeTab === 'stats' ? '#8b5cf6' : '#94a3b8' } }),
+            __('Stats & Live Logs')
           ])
         ])
       ]),
@@ -250,21 +290,46 @@
           el(StatsDashboard),
           el(LiveSecurityLogs)
         ] : [
-          el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '30px' } }, [
+          el('div', { className: 'dashboard-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '35px', padding: '10px 0', borderBottom: '2px solid #f1f5f9' } }, [
             el('div', null, [
-              el('h1', { style: { margin: 0, fontSize: '24px', fontWeight: 800, color: '#1e293b', lineHeight: '1.2' } }, [
-                __('VAPT Admin Dashboard', 'vaptsecure'),
-                el('span', { style: { fontSize: '16px', fontWeight: 600, color: '#64748b', marginLeft: '10px', verticalAlign: 'middle' } }, `v${settings.pluginVersion}`),
-                el('div', { style: { fontSize: '14px', fontWeight: 500, color: '#64748b', marginTop: '5px' } }, sprintf(__('Active Protection for %s', 'vaptsecure'), domain))
+              el('h1', { style: { margin: 0, fontSize: '28px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.025em', display: 'flex', alignItems: 'baseline', gap: '10px' } }, [
+                __('VAPT Admin Dashboard'),
+                el('span', { style: { fontSize: '14px', fontWeight: 600, color: '#94a3b8', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' } }, `v${settings.pluginVersion}`)
+              ]),
+              el('p', { style: { margin: '5px 0 0 0', fontSize: '14px', color: '#64748b', fontWeight: 500 } }, [
+                __('Active Threat Protection for '),
+                el('strong', { style: { color: '#0ea5e9' } }, domain)
               ])
             ]),
-            el(Button, {
-              isSecondary: true,
-              onClick: () => fetchData(true),
-              isBusy: isRefreshing,
-              icon: 'update',
-              style: { borderRadius: '8px' }
-            }, __('Sync Protection', 'vaptsecure'))
+            el('div', { style: { display: 'flex', gap: '12px', alignItems: 'center' } }, [
+              saveStatus && el('div', {
+                style: {
+                  fontSize: '12px',
+                  fontWeight: 700,
+                  padding: '6px 12px',
+                  borderRadius: '8px',
+                  background: saveStatus.type === 'success' ? '#f0fdf4' : '#fef2f2',
+                  color: saveStatus.type === 'success' ? '#166534' : '#991b1b',
+                  border: `1px solid ${saveStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  animation: 'fadeIn 0.3s ease'
+                }
+              }, [
+                el(Icon, { icon: saveStatus.type === 'success' ? 'saved' : 'warning', size: 14 }),
+                saveStatus.message
+              ]),
+              el(Button, {
+                isSecondary: true,
+                onClick: () => fetchData(true),
+                isBusy: isRefreshing,
+                style: { borderRadius: '8px', fontWeight: 600, height: '40px', padding: '0 20px', border: '1px solid #e2e8f0' }
+              }, [
+                el(Icon, { icon: 'update', size: 18, style: { marginRight: '8px' } }),
+                __('Sync Protection')
+              ])
+            ])
           ]),
 
           el('div', { className: 'vapt-feature-list', style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '25px' } },
@@ -326,23 +391,33 @@
       c.type === 'test_action' && c.label !== 'Site Integrity Check'
     ) : [];
 
-    return el(Card, { key: f.key, className: 'vapt-feature-card', style: { borderRadius: '12px', border: '1px solid #e2e8f0' } }, [
-      el(CardHeader, { style: { borderBottom: '1px solid #f1f5f9', padding: '15px 25px' } }, [
+    return el(Card, {
+      key: f.key,
+      className: 'vapt-feature-card',
+      style: {
+        borderRadius: '16px',
+        border: '1px solid #e2e8f0',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -2px rgba(0, 0, 0, 0.05), 0 0 0 1px rgba(0,0,0,0.02)',
+        overflow: 'hidden',
+        transition: 'transform 0.2s ease, box-shadow 0.2s ease'
+      }
+    }, [
+      el(CardHeader, { style: { borderBottom: '1px solid #f1f5f9', padding: '20px 25px', background: '#fff' } }, [
         el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' } }, [
           el('div', null, [
-            el('h3', { style: { margin: 0, fontSize: '16px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' } }, [
+            el('h3', { style: { margin: 0, fontSize: '17px', fontWeight: 800, color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px' } }, [
               f.label,
-              f.severity && el('span', { className: `severity-pill ${f.severity.toLowerCase()}` }, f.severity),
+              f.severity && el('span', { className: `severity-pill ${f.severity.toLowerCase()}`, style: { fontSize: '10px', fontWeight: 700 } }, f.severity),
               f.include_manual_protocol && el(Tooltip, { text: __('View Verification Protocol', 'vaptsecure') },
                 el(Button, { isLink: true, onClick: () => setVerifFeature(f), style: { height: 'auto', padding: 0 } },
-                  el(Icon, { icon: 'excerpt-view', size: 18, style: { color: '#64748b' } })
+                  el(Icon, { icon: 'excerpt-view', size: 18, style: { color: '#94a3b8' } })
                 )
               )
             ]),
-            f.description && el('p', { style: { margin: '5px 0 0 0', fontSize: '12px', color: '#64748b' } }, f.description)
+            f.description && el('p', { style: { margin: '6px 0 0 0', fontSize: '12px', color: '#64748b', fontWeight: 500 } }, f.description)
           ]),
-          el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
-            el('span', { style: { fontSize: '12px', fontWeight: 600 } }, __('Enforce')),
+          el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
+            el('span', { style: { fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' } }, __('Enforce')),
             el(ToggleControl, {
               checked: f.is_enforced != 0,
               onChange: (val) => updateFeature(f.key, { is_enforced: val ? 1 : 0 }),
@@ -352,23 +427,31 @@
           ])
         ])
       ]),
-      el(CardBody, { style: { padding: '25px' } }, [
-        el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '30px' } }, [
-          el('div', null, [
-            el('h4', { style: { fontSize: '13px', fontWeight: 700, marginBottom: '15px', color: '#1e293b' } }, __('Security Configuration')),
+      el(CardBody, { style: { padding: '0' } }, [
+        el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', minHeight: '200px' } }, [
+          // Security Configuration Column
+          el('div', { style: { padding: '25px', background: '#fcfdfd', borderRight: '1px solid #f1f5f9' } }, [
+            el('h4', { style: { fontSize: '11px', fontWeight: 800, marginBottom: '20px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' } }, [
+              el(Icon, { icon: 'admin-settings', size: 16 }),
+              __('Security Configuration')
+            ]),
             implControls.length > 0 ? el(GeneratedInterface, {
               feature: { ...f, generated_schema: { ...schema, controls: implControls } },
               onUpdate: (data) => updateFeature(f.key, { implementation_data: data })
-            }) : el('p', { style: { fontSize: '12px', color: '#94a3b8' } }, __('Standard protection rules active.'))
+            }) : el('p', { style: { fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' } }, __('Standard protection rules active.'))
           ]),
-          el('div', null, [
-            el('h4', { style: { fontSize: '13px', fontWeight: 700, marginBottom: '15px', color: '#1e293b' } }, __('Verification Engine')),
+          // Verification Engine Column
+          el('div', { style: { padding: '25px', background: '#f8fafc' } }, [
+            el('h4', { style: { fontSize: '11px', fontWeight: 800, marginBottom: '20px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' } }, [
+              el(Icon, { icon: 'shield', size: 16 }),
+              __('Verification Engine')
+            ]),
             automControls.length > 0 ? el(GeneratedInterface, {
               feature: { ...f, generated_schema: { ...schema, controls: automControls } },
               hideOpNotes: true,
               hideProtocol: true,
               onUpdate: (data) => updateFeature(f.key, { implementation_data: data })
-            }) : el('p', { style: { fontSize: '12px', color: '#94a3b8' } }, __('Automated monitoring active.'))
+            }) : el('p', { style: { fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' } }, __('Automated monitoring active.'))
           ])
         ])
       ]),

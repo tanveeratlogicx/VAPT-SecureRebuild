@@ -806,49 +806,72 @@
       ]),
 
       status !== 'idle' && status !== 'running' && result && el('div', {
+        className: 'vapt-result-container',
         style: {
-          marginTop: '10px',
-          padding: '12px',
-          background: status === 'success' ? '#f0fdf4' : '#fef2f2',
-          border: `1px solid ${status === 'success' ? '#bbf7d0' : '#fecaca'}`,
-          borderRadius: '6px',
-          fontSize: '13px',
-          color: status === 'success' ? '#166534' : '#991b1b'
+          marginTop: '15px',
+          padding: '16px',
+          background: status === 'success' ? 'rgba(16, 185, 129, 0.04)' : 'rgba(239, 68, 68, 0.04)',
+          border: `1px solid ${status === 'success' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+          borderRadius: '10px',
+          transition: 'all 0.3s ease-in-out'
         }
       }, [
-        el('div', { style: { fontWeight: '700', marginBottom: '8px' } }, status === 'success' ? '✅ SUCCESS' : '❌ FAILURE'),
-        el('div', { style: { marginBottom: '12px', wordBreak: 'break-all', borderLeft: '4px solid #3b82f6', paddingLeft: '12px' } }, [
-          el('div', { style: { marginBottom: '8px' } }, result.message),
-          (typeof result.raw === 'string' && result.raw.startsWith('URL: ')) ? el('div', { style: { fontSize: '11px', marginTop: '8px', opacity: 0.9 } }, [
-            el('strong', null, 'URL: '),
-            el('a', { href: result.raw.split(' | ')[0].replace('URL:', '').trim(), target: '_blank', rel: 'noopener noreferrer', style: { color: 'inherit', textDecoration: 'underline', fontWeight: 'bold' } }, result.raw.split(' | ')[0].replace('URL:', '').trim())
-          ]) : null
-        ])
-      ]),
-
-      // v3.5.2: Multiple Evidence Gallery Renderer (v3.13.16 Safety Fix)
-      result && (result.screenshot_paths || (result.meta && result.meta.screenshot_paths)) &&
-      el(EvidenceGallery, { screenshots: result.screenshot_paths || (result.meta ? result.meta.screenshot_paths : []) }),
-
-      // v3.5.2: Specialized File Inspector for Directory/Raw Content
-      result && (result.raw) &&
-      el(FileInspector, { content: result.raw, testContext: control.description || control.help }),
-
-      result && result.meta && !result.meta.screenshot_paths && el('div', { style: { background: 'rgba(255,255,255,0.5)', padding: '10px', borderRadius: '4px', border: '1px solid rgba(0,0,0,0.05)' } }, [
-        el('div', { style: { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em' } }, [
-          el('div', { style: { color: '#059669' } }, [__('Accepted: '), el('strong', null, result.meta.accepted)]),
-          el('div', { style: { color: '#dc2626' } }, [__('Blocked (429): '), el('strong', null, result.meta.blocked)]),
-          el('div', { style: { color: '#4b5563' } }, [__('Errors: '), el('strong', null, result.meta.errors)]),
-          el('div', { style: { color: '#4b5563' } }, [__('Total: '), el('strong', null, result.meta.total)])
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' } }, [
+          el(Icon, {
+            icon: status === 'success' ? 'yes' : 'no',
+            size: 18,
+            style: { color: status === 'success' ? '#10b981' : '#ef4444' }
+          }),
+          el('span', {
+            style: {
+              fontSize: '12px',
+              fontWeight: 800,
+              color: status === 'success' ? '#065f46' : '#991b1b',
+              textTransform: 'uppercase',
+              letterSpacing: '0.025em'
+            }
+          }, status === 'success' ? __('Verification Success', 'vaptsecure') : __('Verification Failure', 'vaptsecure'))
         ]),
-        // v3.12.20: Linkify Debug Details
-        el('div', { style: { marginTop: '8px', fontSize: '10px', opacity: 0.7, fontFamily: 'monospace' } },
-          result.meta.details.split(/(https?:\/\/[^\s]+)/g).map((part, i) =>
-            part.match(/^https?:\/\//)
-              ? el('a', { key: i, href: part, target: '_blank', rel: 'noopener noreferrer', style: { color: '#2563eb', textDecoration: 'underline' } }, part)
-              : part
-          )
-        )
+
+        el('div', { style: { fontSize: '13px', color: '#334155', lineHeight: '1.5', marginBottom: '12px', fontWeight: 500 } }, result.message),
+
+        // 🛡️ Technical Details: Clean, Collapsible (v3.4.0)
+        el('details', { style: { marginTop: '10px', borderTop: '1px solid rgba(0,0,0,0.05)', paddingTop: '10px' } }, [
+          el('summary', {
+            style: {
+              fontSize: '11px',
+              fontWeight: 700,
+              color: '#64748b',
+              cursor: 'pointer',
+              listStyle: 'none',
+              outline: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px'
+            }
+          }, [
+            el(Icon, { icon: 'editor-code', size: 14 }),
+            __('Technical Trace', 'vaptsecure')
+          ]),
+
+          el('div', { style: { marginTop: '10px', padding: '10px', background: '#f8fafc', borderRadius: '6px', border: '1px solid #e2e8f0' } }, [
+            (typeof result.raw === 'string' && result.raw.includes('URL: ')) && el('div', { style: { fontSize: '11px', marginBottom: '8px', color: '#64748b' } }, [
+              el('strong', { style: { color: '#475569' } }, 'Target: '),
+              el('pre', { style: { margin: '4px 0 0', padding: '8px', background: 'white', borderRadius: '4px', overflowX: 'auto', border: '1px solid #f1f5f9' } }, result.raw)
+            ]),
+
+            result.meta && el('div', { style: { display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '8px', fontSize: '10px', textTransform: 'uppercase', letterSpacing: '0.05em' } }, [
+              el('div', { style: { color: '#059669', background: '#ecfdf5', padding: '4px 8px', borderRadius: '4px' } }, [__('Accepted: '), el('strong', null, result.meta.accepted)]),
+              el('div', { style: { color: '#dc2626', background: '#fef2f2', padding: '4px 8px', borderRadius: '4px' } }, [__('Blocked: '), el('strong', null, result.meta.blocked)]),
+              el('div', { style: { color: '#64748b', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px' } }, [__('Errors: '), el('strong', null, result.meta.errors)]),
+              el('div', { style: { color: '#64748b', background: '#f1f5f9', padding: '4px 8px', borderRadius: '4px' } }, [__('Total: '), el('strong', null, result.meta.total)])
+            ])
+          ])
+        ]),
+
+        // v3.5.2: Multiple Evidence Gallery Renderer (v3.13.16 Safety Fix)
+        (result.screenshot_paths || (result.meta && result.meta.screenshot_paths)) &&
+        el('div', { style: { marginTop: '15px' } }, el(EvidenceGallery, { screenshots: result.screenshot_paths || (result.meta ? result.meta.screenshot_paths : []) }))
       ])
     ]);
   };
