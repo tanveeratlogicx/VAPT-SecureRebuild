@@ -3,29 +3,30 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           1.51.1
- * Author:            VAPT Team
- * Author URI:        https://vaptsecure.com/
- * License:           GPL-2.0+
- * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
+ * Version:           1.52.2
+ * Author:            Tanzeel Malik
+ * Author URI:        https://vapt.copilot.com
  * Text Domain:       vaptsecure
  * Domain Path:       /languages
+ *
+ * @package vaptsecure
  */
 
-// If this file is called directly, abort.
-if (!defined('WPINC')) {
-  die;
+if (!defined('ABSPATH')) {
+  exit; // Exit if accessed directly.
 }
 
-if (! defined('ABSPATH')) {
-  exit;
+// Ensure the Composer autoloader is included if it exists.
+$autoloader = dirname(__FILE__) . '/vendor/autoload.php';
+if (file_exists($autoloader)) {
+  require_once $autoloader;
 }
 
 /**
  * The current version of the plugin.
  */
-if (! defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '1.51.1');
+if (!defined('VAPTSECURE_VERSION')) {
+  define('VAPTSECURE_VERSION', '1.52.2');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');

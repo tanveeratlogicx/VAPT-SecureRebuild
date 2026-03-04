@@ -1191,6 +1191,14 @@ class VAPTSECURE_REST
     if ($license_scope === null && $current) $license_scope = $current['license_scope'] ?: 'single';
     if ($installation_limit === null && $current) $installation_limit = $current['installation_limit'] ?: 1;
 
+    // Auto-generate license ID for new domains if missing (Glitch Fix)
+    if (!$current && empty($license_id)) {
+      $prefix = 'STD-';
+      if ($license_type === 'pro') $prefix = 'PRO-';
+      if ($license_type === 'developer') $prefix = 'DEV-';
+      $license_id = $prefix . strtoupper(substr(md5(uniqid()), 0, 9));
+    }
+
     if ($manual_expiry_date) {
       $manual_expiry_date = date('Y-m-d 00:00:00', strtotime($manual_expiry_date));
     }
@@ -1199,7 +1207,9 @@ class VAPTSECURE_REST
     $current_exp_ts = ($current && !empty($current['manual_expiry_date'])) ? strtotime(date('Y-m-d', strtotime($current['manual_expiry_date']))) : 0;
     $new_exp_ts = $manual_expiry_date ? strtotime(date('Y-m-d', strtotime($manual_expiry_date))) : 0;
 
-    if ($action === 'undo' && !empty($history)) {
+    if ($action === 'invalidate') {
+      $manual_expiry_date = '1970-01-01 00:00:00';
+    } else if ($action === 'undo' && !empty($history)) {
       $last = array_pop($history);
       $days = (int) $last['duration_days'];
       $manual_expiry_date = date('Y-m-d 00:00:00', strtotime($current['manual_expiry_date'] . " -$days days"));
