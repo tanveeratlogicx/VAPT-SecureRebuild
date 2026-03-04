@@ -359,6 +359,22 @@ class VAPTSECURE_DB
   }
 
   /**
+   * Get global enforcement status
+   */
+  public static function get_global_enforcement()
+  {
+    return (bool) get_option('vaptsecure_global_protection', 1);
+  }
+
+  /**
+   * Update global enforcement status
+   */
+  public static function update_global_enforcement($enabled)
+  {
+    return update_option('vaptsecure_global_protection', (int) $enabled);
+  }
+
+  /**
    * Helper to get real IP
    */
   private static function get_real_ip()

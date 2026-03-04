@@ -22,6 +22,8 @@
     const [saveStatus, setSaveStatus] = useState(null);
     const [enforceStatusMap, setEnforceStatusMap] = useState({});
     const [verifFeature, setVerifFeature] = useState(null);
+    const [globalProtection, setGlobalProtection] = useState(true);
+    const [globalSaving, setGlobalSaving] = useState(false);
 
     const [securityStats, setSecurityStats] = useState({
       total_blocks: 0,
@@ -71,9 +73,16 @@
         });
     };
 
+    const fetchGlobalSettings = () => {
+      apiFetch({ path: 'vaptsecure/v1/settings/enforcement' })
+        .then(data => setGlobalProtection(data.enabled))
+        .catch(err => console.error('Failed to fetch global settings:', err));
+    };
+
     useEffect(() => {
       fetchData();
       fetchSecurityInsights();
+      fetchGlobalSettings();
 
       // Real-time Polling: 30 seconds
       const interval = setInterval(fetchSecurityInsights, 30000);
@@ -293,42 +302,52 @@
           el('div', { className: 'dashboard-header', style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '35px', padding: '10px 0', borderBottom: '2px solid #f1f5f9' } }, [
             el('div', null, [
               el('h1', { style: { margin: 0, fontSize: '28px', fontWeight: 900, color: '#0f172a', letterSpacing: '-0.025em', display: 'flex', alignItems: 'baseline', gap: '10px' } }, [
-                __('VAPT Admin Dashboard'),
+                __('VAPT Admin Dashboard', 'vaptsecure'),
                 el('span', { style: { fontSize: '14px', fontWeight: 600, color: '#94a3b8', background: '#f1f5f9', padding: '2px 8px', borderRadius: '6px' } }, `v${settings.pluginVersion}`)
               ]),
               el('p', { style: { margin: '5px 0 0 0', fontSize: '14px', color: '#64748b', fontWeight: 500 } }, [
-                __('Active Threat Protection for '),
+                __('Active Threat Protection for ', 'vaptsecure'),
                 el('strong', { style: { color: '#0ea5e9' } }, domain)
               ])
             ]),
-            el('div', { style: { display: 'flex', gap: '12px', alignItems: 'center' } }, [
-              saveStatus && el('div', {
-                style: {
-                  fontSize: '12px',
-                  fontWeight: 700,
-                  padding: '6px 12px',
-                  borderRadius: '8px',
-                  background: saveStatus.type === 'success' ? '#f0fdf4' : '#fef2f2',
-                  color: saveStatus.type === 'success' ? '#166534' : '#991b1b',
-                  border: `1px solid ${saveStatus.type === 'success' ? '#bbf7d0' : '#fecaca'}`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '6px',
-                  animation: 'fadeIn 0.3s ease'
-                }
-              }, [
-                el(Icon, { icon: saveStatus.type === 'success' ? 'saved' : 'warning', size: 14 }),
-                saveStatus.message
+            el('div', {
+              style: {
+                display: 'flex',
+                alignItems: 'center',
+                gap: '15px',
+                background: globalProtection ? '#f0fdf9' : '#fef2f2',
+                padding: '12px 20px',
+                borderRadius: '12px',
+                border: `1px solid ${globalProtection ? '#ccfbf1' : '#fee2e2'}`,
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)'
+              }
+            }, [
+              el('div', { style: { textAlign: 'right' } }, [
+                el('div', { style: { fontSize: '12px', fontWeight: 800, color: globalProtection ? '#0d9488' : '#dc2626', textTransform: 'uppercase', letterSpacing: '0.05em' } },
+                  globalProtection ? __('Protection Active', 'vaptsecure') : __('Protection Disabled', 'vaptsecure')
+                ),
+                el('div', { style: { fontSize: '11px', color: '#64748b', fontWeight: 500 } },
+                  globalProtection ? __('Site is shielded', 'vaptsecure') : __('Protection is offline', 'vaptsecure')
+                )
               ]),
-              el(Button, {
-                isSecondary: true,
-                onClick: () => fetchData(true),
-                isBusy: isRefreshing,
-                style: { borderRadius: '8px', fontWeight: 600, height: '40px', padding: '0 20px', border: '1px solid #e2e8f0' }
-              }, [
-                el(Icon, { icon: 'update', size: 18, style: { marginRight: '8px' } }),
-                __('Sync Protection')
-              ])
+              el(ToggleControl, {
+                label: '',
+                checked: globalProtection,
+                disabled: globalSaving,
+                onChange: (val) => {
+                  setGlobalSaving(true);
+                  apiFetch({
+                    path: 'vaptsecure/v1/settings/enforcement',
+                    method: 'POST',
+                    data: { enabled: val }
+                  }).then(() => {
+                    setGlobalProtection(val);
+                    setGlobalSaving(false);
+                    // Refresh data to show consistency
+                    fetchData(true);
+                  }).catch(() => setGlobalSaving(false));
+                }
+              })
             ])
           ]),
 
@@ -417,11 +436,12 @@
             f.description && el('p', { style: { margin: '6px 0 0 0', fontSize: '12px', color: '#64748b', fontWeight: 500 } }, f.description)
           ]),
           el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
-            el('span', { style: { fontSize: '11px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' } }, __('Enforce')),
+            el('span', { style: { fontSize: '11px', fontWeight: 700, color: globalProtection ? '#64748b' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' } }, __('Enforce')),
             el(ToggleControl, {
               checked: f.is_enforced != 0,
               onChange: (val) => updateFeature(f.key, { is_enforced: val ? 1 : 0 }),
-              disabled: true,
+              disabled: !globalProtection,
+              help: !globalProtection ? __('Active only when Global Protection is ON', 'vaptsecure') : '',
               __nextHasNoMarginBottom: true
             })
           ])

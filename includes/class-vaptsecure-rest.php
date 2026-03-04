@@ -151,6 +151,18 @@ class VAPTSECURE_REST
       'permission_callback' => array($this, 'check_permission'),
     ));
 
+    register_rest_route('vaptsecure/v1', '/settings/enforcement', array(
+      'methods'  => 'GET',
+      'callback' => array($this, 'get_global_enforcement'),
+      'permission_callback' => array($this, 'check_read_permission'),
+    ));
+
+    register_rest_route('vaptsecure/v1', '/settings/enforcement', array(
+      'methods'  => 'POST',
+      'callback' => array($this, 'update_global_enforcement'),
+      'permission_callback' => array($this, 'check_permission'),
+    ));
+
     register_rest_route('vaptsecure/v1', '/upload-media', array(
       'methods'  => 'POST',
       'callback' => array($this, 'upload_media'),
@@ -2187,5 +2199,33 @@ class VAPTSECURE_REST
     $limit = $request->get_param('limit') ?: 50;
     $offset = $request->get_param('offset') ?: 0;
     return new WP_REST_Response(VAPTSECURE_DB::get_security_events($limit, $offset), 200);
+  }
+
+  /**
+   * Get Global Enforcement
+   * @v3.13.20
+   */
+  public function get_global_enforcement($request)
+  {
+    return new WP_REST_Response(array(
+      'enabled' => VAPTSECURE_DB::get_global_enforcement()
+    ), 200);
+  }
+
+  /**
+   * Update Global Enforcement
+   * @v3.13.20
+   */
+  public function update_global_enforcement($request)
+  {
+    $params = $request->get_json_params();
+    $enabled = isset($params['enabled']) ? (bool)$params['enabled'] : true;
+
+    VAPTSECURE_DB::update_global_enforcement($enabled);
+
+    return new WP_REST_Response(array(
+      'success' => true,
+      'enabled' => $enabled
+    ), 200);
   }
 }

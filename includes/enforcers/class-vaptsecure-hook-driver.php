@@ -50,6 +50,18 @@ class VAPTSECURE_Hook_Driver
    */
   public static function apply($impl_data, $schema, $key = '')
   {
+    $global_enforced = VAPTSECURE_DB::get_global_enforcement();
+
+    // Check for individual enforcement override if global is off
+    $feature_meta = VAPTSECURE_DB::get_feature_meta($key);
+    $is_enforced = ($feature_meta && isset($feature_meta['is_enforced'])) ? (bool)$feature_meta['is_enforced'] : false;
+
+    // 🛡️ GLOBAL MASTER TOGGLE (v3.13.20)
+    // Runs if Global is ON OR if this specific feature is explicitly Enforced (Override)
+    if (!$global_enforced && !$is_enforced) {
+      return; // Stop enforcement site-wide if both are false
+    }
+
     $log_file = VAPTSECURE_PATH . 'vapt-debug.txt';
     $log = "VAPT Enforcement Run at " . current_time('mysql') . "\n";
     $log .= "Feature: $key\n";
