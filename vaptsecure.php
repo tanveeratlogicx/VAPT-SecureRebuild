@@ -3,7 +3,7 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           1.9.6
+ * Version:           1.12.1
  * Author:            VAPT Team
  * Author URI:        https://vaptsecure.com/
  * License:           GPL-2.0+
@@ -25,7 +25,7 @@ if (! defined('ABSPATH')) {
  * The current version of the plugin.
  */
 if (! defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '1.9.6');
+  define('VAPTSECURE_VERSION', '1.12.1');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
@@ -239,12 +239,26 @@ function vaptsecure_activate_plugin()
         PRIMARY KEY  (id),
         KEY domain (domain)
     ) $charset_collate;";
+  // Security Events Table
+  $table_security_events = "CREATE TABLE {$wpdb->prefix}vaptsecure_security_events (
+        id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+        feature_key VARCHAR(100) NOT NULL,
+        event_type VARCHAR(50) NOT NULL,
+        ip_address VARCHAR(45) NOT NULL,
+        request_uri TEXT,
+        details LONGTEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY  (id),
+        KEY feature_key (feature_key),
+        KEY created_at (created_at)
+    ) $charset_collate;";
   dbDelta($table_domains);
   dbDelta($table_features);
   dbDelta($table_status);
   dbDelta($table_meta);
   dbDelta($table_history);
   dbDelta($table_builds);
+  dbDelta($table_security_events);
   // Ensure data directory exists
   if (! file_exists(VAPTSECURE_PATH . 'data')) {
     wp_mkdir_p(VAPTSECURE_PATH . 'data');
@@ -406,7 +420,23 @@ if (! function_exists('vaptsecure_manual_db_fix')) {
       if (empty($col_limit)) {
         $wpdb->query("ALTER TABLE {$table} ADD COLUMN installation_limit INT DEFAULT 1");
       }
-      $msg = "Database schema updated (History Table + assigned_to + is_enforced + Status Enum + Manual Expiry + Generated Schema + Implementation Data + Domain Enabled + Robust ID column + License Scope + Inst. Limit).";
+
+      // Force create Security Events table
+      $table_security_events = "CREATE TABLE {$wpdb->prefix}vaptsecure_security_events (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            feature_key VARCHAR(100) NOT NULL,
+            event_type VARCHAR(50) NOT NULL,
+            ip_address VARCHAR(45) NOT NULL,
+            request_uri TEXT,
+            details LONGTEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY feature_key (feature_key),
+            KEY created_at (created_at)
+        ) $charset_collate;";
+      dbDelta($table_security_events);
+
+      $msg = "Database schema updated (History Table + Security Events + assigned_to + is_enforced + Status Enum + Manual Expiry + Generated Schema + Implementation Data + Domain Enabled + Robust ID column + License Scope + Inst. Limit).";
       wp_die(sprintf("<h1>VAPT Secure Database Updated</h1><p>Schema refresh run. %s</p><p>Please go back to the dashboard.</p>", esc_html($msg)));
     }
   }

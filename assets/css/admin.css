@@ -115,31 +115,60 @@
     background-color: #e8e8e8 !important;
 }
 
-.severity {
-    font-size: 11px;
+.severity-pill {
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 10px;
     font-weight: 700;
     text-transform: uppercase;
-    background: none !important;
-    padding: 0 !important;
-    border-radius: 0 !important;
+    border: 1px solid transparent;
+    display: inline-flex;
+    align-items: center;
+    line-height: 1;
 }
 
-.severity.critical,
-.severity-critical,
-.severity.high,
-.severity-high {
-    font-weight: 700 !important;
-    background: none !important;
-    color: inherit !important;
+.severity-pill.critical {
+    background: #FEE2E2 !important;
+    color: #991B1B !important;
+    border-color: #F87171 !important;
 }
 
-.severity.medium,
-.severity-medium,
-.severity.low,
-.severity-low {
-    font-weight: 400 !important;
-    background: none !important;
-    color: inherit !important;
+.severity-pill.high {
+    background: #FFEDD5 !important;
+    color: #9A3412 !important;
+    border-color: #FB923C !important;
+}
+
+.severity-pill.medium {
+    background: #DBEAFE !important;
+    color: #1E40AF !important;
+    border-color: #60A5FA !important;
+}
+
+.severity-pill.low {
+    background: #F1F5F9 !important;
+    color: #475569 !important;
+    border-color: #CBD5E1 !important;
+}
+
+/* Toggle Colors for Premium Look */
+.components-form-toggle:not(.is-checked) .components-form-toggle__track {
+    background-color: #cbd5e1 !important;
+    /* Darker grey for inactive */
+    border-color: #94a3b8 !important;
+}
+
+.components-form-toggle:not(.is-checked) .components-form-toggle__thumb {
+    background-color: #f8fafc !important;
+}
+
+.components-form-toggle.is-checked .components-form-toggle__track {
+    background-color: #2271b1 !important;
+    border-color: #1e5f96 !important;
+}
+
+.components-form-toggle.is-checked .components-form-toggle__thumb {
+    background-color: #ffffff !important;
 }
 
 .toggle-switch {
@@ -1145,6 +1174,91 @@
     font-size: 13px !important;
 }
 
+/* --- VAPT Client Dashboard Revamp (v4.0.0) --- */
+.vapt-client-root.premium-layout {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen-Sans, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+}
+
+.vapt-client-sidebar .menu-item:hover {
+    background: #f1f5f9 !important;
+    transform: translateX(4px);
+}
+
+.vapt-client-sidebar .menu-item.active {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.vapt-stat-card.premium {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.vapt-stat-card.premium:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04) !important;
+    border-color: #3b82f6 !important;
+}
+
+.pulse-dot {
+    width: 8px;
+    height: 8px;
+    background: #10b981;
+    border-radius: 50%;
+    display: inline-block;
+    animation: vapt-pulse 2s infinite;
+}
+
+@keyframes vapt-pulse {
+    0% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+
+    70% {
+        transform: scale(1);
+        box-shadow: 0 0 0 10px rgba(16, 185, 129, 0);
+    }
+
+    100% {
+        transform: scale(0.95);
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
+}
+
+.vapt-log-card {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+.vapt-log-card tr:hover {
+    background-color: #f8fafc;
+}
+
+.vapt-feature-list .components-card {
+    transition: all 0.2s ease;
+}
+
+.vapt-feature-list .components-card:hover {
+    border-color: #2271b1 !important;
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Scrollbar styling for a cleaner look */
+.vapt-client-main::-webkit-scrollbar {
+    width: 6px;
+}
+
+.vapt-client-main::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.vapt-client-main::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 10px;
+}
+
+.vapt-client-main::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+}
+
 /* Mapping Configuration Scrollable Body */
 .vapt-mapping-scroll-body {
     max-height: 400px;
@@ -1175,4 +1289,82 @@
 .vapt-compact-panel>.components-panel__body-title h2 {
     margin: 0 !important;
     font-size: 13px !important;
+}
+
+/* Premium Dashboard Layout (v1.5.0) */
+.vapt-client-root.premium-layout {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
+    color: #1e293b;
+}
+
+.vapt-client-sidebar {
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.02);
+    z-index: 10;
+}
+
+.sidebar-header h2 {
+    letter-spacing: -0.02em;
+}
+
+.sidebar-menu .menu-item {
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.sidebar-menu .menu-item:hover {
+    background: #f8fafc !important;
+}
+
+.sidebar-menu .menu-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 60%;
+    background: #1d4ed8;
+    border-radius: 0 4px 4px 0;
+}
+
+.vapt-stat-card.premium {
+    background: rgba(255, 255, 255, 0.8) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.vapt-log-card {
+    background: rgba(255, 255, 255, 0.8) !important;
+    backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+}
+
+.vapt-feature-card {
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02) !important;
+    border-radius: 12px !important;
+}
+
+.vapt-feature-card:hover {
+    box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.04) !important;
+    border-color: #3b82f6 !important;
+}
+
+.severity-pill {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 10px !important;
+    padding: 2px 8px !important;
+    border-radius: 6px !important;
+    font-weight: 800 !important;
+}
+
+.status-badge {
+    font-size: 9px !important;
+    padding: 2px 6px !important;
+    border-radius: 4px !important;
+    font-weight: 700 !important;
+    text-transform: uppercase;
 }

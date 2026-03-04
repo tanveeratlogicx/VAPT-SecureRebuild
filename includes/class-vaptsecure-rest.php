@@ -21,7 +21,7 @@ class VAPTSECURE_REST
     register_rest_route('vaptsecure/v1', '/features', array(
       'methods'  => 'GET',
       'callback' => array($this, 'get_features'),
-      'permission_callback' => array($this, 'check_permission'),
+      'permission_callback' => array($this, 'check_read_permission'),
     ));
 
     register_rest_route('vaptsecure/v1', '/data-files/all', array(
@@ -58,7 +58,7 @@ class VAPTSECURE_REST
     register_rest_route('vaptsecure/v1', '/features/update', array(
       'methods'  => 'POST',
       'callback' => array($this, 'update_feature'),
-      'permission_callback' => array($this, 'check_permission'),
+      'permission_callback' => array($this, 'check_read_permission'),
     ));
 
     register_rest_route('vaptsecure/v1', '/features/transition', array(
@@ -82,7 +82,7 @@ class VAPTSECURE_REST
     register_rest_route('vaptsecure/v1', '/features/(?P<key>[a-zA-Z0-9_-]+)/verify', array(
       'methods'             => 'POST',
       'callback'            => array($this, 'verify_implementation'),
-      'permission_callback' => array($this, 'check_permission'),
+      'permission_callback' => array($this, 'check_read_permission'),
     ));
 
     register_rest_route('vaptsecure/v1', '/features/(?P<key>[a-zA-Z0-9_-]+)/reset', array(
@@ -196,11 +196,28 @@ class VAPTSECURE_REST
       'callback'            => array($this, 'batch_revert_to_draft'),
       'permission_callback' => array($this, 'check_permission'),
     ));
+
+    register_rest_route('vaptsecure/v1', '/security/stats', array(
+      'methods'  => 'GET',
+      'callback' => array($this, 'get_security_stats'),
+      'permission_callback' => array($this, 'check_read_permission'),
+    ));
+
+    register_rest_route('vaptsecure/v1', '/security/logs', array(
+      'methods'  => 'GET',
+      'callback' => array($this, 'get_security_logs'),
+      'permission_callback' => array($this, 'check_read_permission'),
+    ));
   }
 
   public function check_permission()
   {
     return is_vaptsecure_superadmin();
+  }
+
+  public function check_read_permission()
+  {
+    return is_vaptsecure_superadmin() || current_user_can('manage_options');
   }
 
   public function get_features($request)
@@ -438,6 +455,10 @@ class VAPTSECURE_REST
       $enabled_features = [];
       if ($domain) {
         $dom_row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$wpdb->prefix}vaptsecure_domains WHERE domain = %s", $domain));
+        if (!$dom_row && strpos($domain, '.') !== false) {
+          $domain_base = explode('.', $domain)[0];
+          $dom_row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$wpdb->prefix}vaptsecure_domains WHERE domain = %s", $domain_base));
+        }
         if ($dom_row) {
           $feat_rows = $wpdb->get_results($wpdb->prepare("SELECT feature_key FROM {$wpdb->prefix}vaptsecure_domain_features WHERE domain_id = %d AND enabled = 1", $dom_row->id), ARRAY_N);
           $enabled_features = array_column($feat_rows, 0);
@@ -2149,5 +2170,22 @@ class VAPTSECURE_REST
     });
 
     return $schema;
+  }
+  /**
+   * GET /vaptsecure/v1/security/stats
+   */
+  public function get_security_stats()
+  {
+    return new WP_REST_Response(VAPTSECURE_DB::get_security_stats_summary(), 200);
+  }
+
+  /**
+   * GET /vaptsecure/v1/security/logs
+   */
+  public function get_security_logs($request)
+  {
+    $limit = $request->get_param('limit') ?: 50;
+    $offset = $request->get_param('offset') ?: 0;
+    return new WP_REST_Response(VAPTSECURE_DB::get_security_events($limit, $offset), 200);
   }
 }

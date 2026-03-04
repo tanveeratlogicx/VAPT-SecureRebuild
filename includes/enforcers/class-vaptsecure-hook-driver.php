@@ -483,6 +483,7 @@ class VAPTSECURE_Hook_Driver
                 header('Access-Control-Expose-Headers: X-VAPT-Count, X-VAPT-Enforced, X-VAPT-Feature, X-VAPT-Limit', false);
                 header('Retry-After: ' . $duration);
               }
+              VAPTSECURE_DB::log_security_event($feature_key, 'Block', array('type' => 'Rate Limit', 'limit' => $limit, 'count' => $current));
               flock($fp, LOCK_UN);
               fclose($fp);
               wp_die("VAPT: Too Many Requests ($feature_key).", 'Rate Limit Exceeded', array('response' => 429));
@@ -541,6 +542,7 @@ class VAPTSECURE_Hook_Driver
           header('X-VAPT-Enforced: php-dir');
           header('X-VAPT-Feature: ' . $key);
           header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
+          VAPTSECURE_DB::log_security_event($key, 'Block', array('type' => 'Directory Browsing', 'uri' => $uri));
           wp_die('VAPT: Directory Browsing is Blocked for Security.');
         }
       }
@@ -558,6 +560,7 @@ class VAPTSECURE_Hook_Driver
       header('X-VAPT-Feature: ' . $key);
       header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
       header('Content-Type: text/plain');
+      VAPTSECURE_DB::log_security_event($key, 'Block', array('type' => 'XML-RPC'));
       wp_die('VAPT: XML-RPC Access is Blocked for Security.');
     }
   }
@@ -573,6 +576,7 @@ class VAPTSECURE_Hook_Driver
       header('X-VAPT-Enforced: php-null-byte');
       header('X-VAPT-Feature: ' . $key);
       header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
+      VAPTSECURE_DB::log_security_event($key, 'Block', array('type' => 'Null Byte Injection', 'query' => $query));
       wp_die('VAPT: Null Byte Injection Attempt Blocked.');
     }
   }
@@ -634,6 +638,7 @@ class VAPTSECURE_Hook_Driver
         header('X-VAPT-Enforced: php-debug-log-block');
         header('X-VAPT-Feature: ' . $key);
         header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
+        VAPTSECURE_DB::log_security_event($key, 'Block', array('type' => 'Debug Log Exposure', 'uri' => $uri));
         wp_die('VAPT: Access to debug.log is Blocked for Security.');
       }
     });
@@ -678,6 +683,7 @@ class VAPTSECURE_Hook_Driver
         header('X-VAPT-Enforced: php-author-enum');
         header('X-VAPT-Feature: ' . $key);
         header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
+        VAPTSECURE_DB::log_security_event($key, 'Block', array('type' => 'Author Enumeration', 'author' => $_GET['author']));
         wp_die('VAPT: Author Enumeration is Blocked for Security.');
       }
     });
@@ -729,6 +735,7 @@ class VAPTSECURE_Hook_Driver
           header('X-VAPT-Enforced: php-sensitive-file');
           header('X-VAPT-Feature: ' . $key);
           header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
+          VAPTSECURE_DB::log_security_event($key, 'Block', array('type' => 'Sensitive File Access', 'file' => $file));
           wp_die('VAPT: Access to this file is Blocked for Security.');
         }
       }
@@ -765,6 +772,7 @@ class VAPTSECURE_Hook_Driver
         header('X-VAPT-Enforced: php-cron');
         header('X-VAPT-Feature: ' . $key);
         header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
+        VAPTSECURE_DB::log_security_event($key, 'Block', array('type' => 'WP-Cron Access'));
         wp_die('VAPT: WP-Cron is Blocked for Security.');
       }
     }, 1);
@@ -783,6 +791,7 @@ class VAPTSECURE_Hook_Driver
         header('X-VAPT-Enforced: php-rest-api');
         header('X-VAPT-Feature: ' . $key);
         header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
+        VAPTSECURE_DB::log_security_event($key, 'Block', array('type' => 'REST API Access Restricted'));
         return new WP_Error('rest_forbidden', 'VAPT: REST API access is restricted.', array('status' => 403));
       }
       return $result;

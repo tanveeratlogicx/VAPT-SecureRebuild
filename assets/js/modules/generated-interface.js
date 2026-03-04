@@ -12,7 +12,24 @@
    * Standardizes on vaptSecureSettings.homeUrl and detects absolute paths/URLs.
    */
   const resolveUrl = (path, configUrl, featureKey = '') => {
-    const homeUrl = (window.vaptSecureSettings && window.vaptSecureSettings.homeUrl) ? window.vaptSecureSettings.homeUrl.replace(/\/$/, '') : window.location.origin;
+    let homeUrl = (window.vaptSecureSettings && window.vaptSecureSettings.homeUrl) ? window.vaptSecureSettings.homeUrl.replace(/\/$/, '') : window.location.origin;
+
+    // 🛡️ Origin Alignment (v3.3.52): Force current protocol/host/port if hostname matches to avoid CORS
+    const alignUrl = (urlStr) => {
+      try {
+        if (!urlStr || !urlStr.startsWith('http')) return urlStr;
+        const u = new URL(urlStr);
+        const loc = window.location;
+        if (u.hostname === loc.hostname) {
+          u.protocol = loc.protocol;
+          u.host = loc.host;
+        }
+        return u.toString();
+      } catch (e) { }
+      return urlStr;
+    };
+
+    homeUrl = alignUrl(homeUrl);
 
     // 🛡️ Logic Refinement (v3.13.8): Context-Aware Specificity
     let base = homeUrl;
@@ -27,27 +44,26 @@
 
     if (configUrl) {
       if (configUrl.startsWith('http')) {
-        const normalizedConfig = configUrl.replace(/\/$/, '');
+        configUrl = alignUrl(configUrl.replace(/\/$/, ''));
+        const normalizedConfig = configUrl;
         // If configUrl is just the root domain, AND we have a better sub, JOIN them.
         if (normalizedConfig === homeUrl && (sub && sub !== '/' && !sub.startsWith('http'))) {
           // sub is already set above or from path
         } else {
-          return configUrl; // Absolute override
+          return configUrl; // Absolute override (now port-aligned)
         }
       } else {
         sub = configUrl; // Relative override
       }
     } else if (path && path.startsWith('http')) {
-      return path; // Path is already absolute
+      return alignUrl(path); // Path is already absolute (now port-aligned)
     }
 
     const normalizedPath = sub.startsWith('/') ? sub : '/' + sub;
-    const result = base + (normalizedPath === '/' ? '' : normalizedPath);
+    let result = base + (normalizedPath === '/' ? '' : normalizedPath);
 
-    // Final Fallback: if result is still root but sub had content, force it
-    if ((result === homeUrl || result === homeUrl + '/') && sub && sub.length > 1 && !sub.startsWith('http')) {
-      return homeUrl + (sub.startsWith('/') ? sub : '/' + sub);
-    }
+    // 🛡️ Trailing Slash Resilience (v3.3.53): Ensure base URLs ALWAYS end in / to prevent fetch failure
+    if (!result.includes('/', 8)) result += '/';
 
     return result;
   };
@@ -86,15 +102,17 @@
   const PROBE_REGISTRY = {
     // 1. Header Probe: Verifies HTTP response headers
     check_headers: async (siteUrl, control, featureData, featureKey) => {
-      const url = resolveUrl('/', control.config?.url);
+      const url = resolveUrl('/', control.config?.url, featureKey);
       const contextParam = (featureKey && (featureKey.includes('login') || featureKey.includes('brute'))) ? '&vaptsecure_test_context=login' : '';
-      const resp = await fetch(url + '?vaptsecure_header_check=' + Date.now() + contextParam, { method: 'GET', cache: 'no-store' });
+      const finalUrl = url + (url.includes('?') ? '&' : '?') + 'vaptsecure_header_check=' + Date.now() + contextParam;
+      console.log(`[VAPT] Header Probe: Fetching ${finalUrl}`);
+      const response = await fetch(finalUrl, { method: 'GET', cache: 'no-store' });
       const headers = {};
-      resp.headers.forEach((v, k) => { headers[k] = v; });
+      response.headers.forEach((v, k) => { headers[k] = v; });
       console.log("[VAPT] Full Response Headers:", headers);
 
-      const vaptEnforced = resp.headers.get('x-vapt-enforced');
-      const enforcedFeature = resp.headers.get('x-vapt-feature'); // Can be comma-separated
+      const vaptEnforced = response.headers.get('x-vapt-enforced');
+      const enforcedFeature = response.headers.get('x-vapt-feature'); // Can be comma-separated
 
       let headerStr = '';
       const keepHeaders = ['strict-transport-security', 'x-vapt-enforced', 'x-frame-options', 'x-content-type-options', 'x-xss-protection', 'referrer-policy', 'permissions-policy', 'content-security-policy'];
@@ -111,13 +129,13 @@
         if (featureKey && enforcedFeature) {
           const features = enforcedFeature.split(',').map(f => f.trim());
           if (!features.includes(featureKey)) {
-            return { success: false, message: `Inconclusive: Headers are present, but this specific feature ('${featureKey}') is not listed in enforcement. Found: ${enforcedFeature}.`, raw: `URL: ${url} | Status: ${resp.status} | Expected: A+ Headers\n${headerStr.trim()}` };
+            return { success: false, message: `Inconclusive: Headers are present, but this specific feature ('${featureKey}') is not listed in enforcement. Found: ${enforcedFeature}.`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n${headerStr.trim()}` };
           }
         }
-        return { success: true, message: `Plugin is actively enforcing headers (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${resp.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
+        return { success: true, message: `Plugin is actively enforcing headers (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
       }
 
-      return { success: false, message: `Security headers present, but NOT by this plugin. VAPT enforcement header missing.`, raw: `URL: ${url} | Status: ${resp.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
+      return { success: false, message: `Security headers present, but NOT by this plugin. VAPT enforcement header missing.`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
     },
 
     // 2. Batch Probe: Verifies Rate Limiting (Sends 125% of RPM) (v3.6.25 Sequential)
@@ -261,10 +279,11 @@
 
     // 3. Status Probe: Verifies specific file block (e.g., XML-RPC)
     block_xmlrpc: async (siteUrl, control, featureData, featureKey) => {
-      const url = resolveUrl('/xmlrpc.php', control.config?.url);
-      const resp = await fetch(url, { method: 'POST', body: '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName><params></params></methodCall>' });
-      const vaptEnforced = resp.headers.get('x-vapt-enforced');
-      const enforcedFeature = resp.headers.get('x-vapt-feature');
+      const url = resolveUrl('/xmlrpc.php', control.config?.url, featureKey);
+      console.log(`[VAPT] XML-RPC Probe: Fetching ${url}`);
+      const response = await fetch(url, { method: 'POST', body: '<?xml version="1.0"?><methodCall><methodName>system.listMethods</methodName><params></params></methodCall>' });
+      const vaptEnforced = response.headers.get('x-vapt-enforced');
+      const enforcedFeature = response.headers.get('x-vapt-feature');
 
       if (vaptEnforced === 'php-xmlrpc') {
         if (featureKey && enforcedFeature && enforcedFeature !== featureKey) {
@@ -718,8 +737,13 @@
           throw new Error('Invalid test result format');
         }
       } catch (err) {
+        console.error(`[VAPT] Probe Execution Error for ${control.test_logic}:`, err);
         setStatus('error');
-        setResult({ success: false, message: `Error: ${err.message}` });
+        setResult({
+          success: false,
+          message: `Error: ${err.message}`,
+          raw: `URL: ${resolveUrl('/', control.config?.url, featureKey)} | Error: ${err.message}`
+        });
       }
     };
 

@@ -303,4 +303,71 @@ class VAPTSECURE_DB
 
     return true;
   }
+  /**
+   * Log a security event
+   */
+  public static function log_security_event($feature_key, $event_type, $details = array())
+  {
+    global $wpdb;
+    $table = $wpdb->prefix . 'vaptsecure_security_events';
+
+    return $wpdb->insert(
+      $table,
+      array(
+        'feature_key' => $feature_key,
+        'event_type'  => $event_type,
+        'ip_address'  => self::get_real_ip(),
+        'request_uri' => $_SERVER['REQUEST_URI'],
+        'details'     => json_encode($details),
+        'created_at'  => current_time('mysql'),
+      ),
+      array('%s', '%s', '%s', '%s', '%s', '%s')
+    );
+  }
+
+  /**
+   * Get recent security events
+   */
+  public static function get_security_events($limit = 50, $offset = 0)
+  {
+    global $wpdb;
+    $table = $wpdb->prefix . 'vaptsecure_security_events';
+    return $wpdb->get_results($wpdb->prepare("SELECT * FROM $table ORDER BY created_at DESC LIMIT %d OFFSET %d", $limit, $offset), ARRAY_A);
+  }
+
+  /**
+   * Get security stats summary
+   */
+  public static function get_security_stats_summary()
+  {
+    global $wpdb;
+    $table = $wpdb->prefix . 'vaptsecure_security_events';
+
+    $total_blocks = $wpdb->get_var("SELECT COUNT(*) FROM $table");
+    $blocks_24h = $wpdb->get_var("SELECT COUNT(*) FROM $table WHERE created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)");
+
+    $top_risk = $wpdb->get_row("SELECT feature_key, COUNT(*) as count FROM $table GROUP BY feature_key ORDER BY count DESC LIMIT 1", ARRAY_A);
+
+    $active_enforcements = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}vaptsecure_feature_meta WHERE is_enforced = 1");
+
+    return array(
+      'total_blocks' => (int) $total_blocks,
+      'blocks_24h'   => (int) $blocks_24h,
+      'top_risk'     => $top_risk ? $top_risk['feature_key'] : __('None', 'vaptsecure'),
+      'active_enforcements' => (int) $active_enforcements
+    );
+  }
+
+  /**
+   * Helper to get real IP
+   */
+  private static function get_real_ip()
+  {
+    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) return $_SERVER['HTTP_CF_CONNECTING_IP'];
+    if (!empty($_SERVER['HTTP_X_FORWARDED_FOR'])) {
+      $ips = explode(',', $_SERVER['HTTP_X_FORWARDED_FOR']);
+      return trim($ips[0]);
+    }
+    return $_SERVER['REMOTE_ADDR'] ?? '0.0.0.0';
+  }
 }
