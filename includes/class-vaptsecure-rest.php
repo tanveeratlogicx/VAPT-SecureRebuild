@@ -160,7 +160,7 @@ class VAPTSECURE_REST
     register_rest_route('vaptsecure/v1', '/settings/enforcement', array(
       'methods'  => 'POST',
       'callback' => array($this, 'update_global_enforcement'),
-      'permission_callback' => array($this, 'check_permission'),
+      'permission_callback' => array($this, 'check_read_permission'),
     ));
 
     register_rest_route('vaptsecure/v1', '/upload-media', array(
@@ -2222,6 +2222,10 @@ class VAPTSECURE_REST
     $enabled = isset($params['enabled']) ? (bool)$params['enabled'] : true;
 
     VAPTSECURE_DB::update_global_enforcement($enabled);
+
+    // [v3.13.20] Trigger immediate rebuild of all config files
+    require_once VAPTSECURE_PATH . 'includes/class-vaptsecure-enforcer.php';
+    VAPTSECURE_Enforcer::rebuild_all();
 
     return new WP_REST_Response(array(
       'success' => true,

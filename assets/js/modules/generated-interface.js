@@ -131,7 +131,12 @@
           if (activeFeatures.includes(featureKey)) {
             return { success: true, message: `Plugin is actively enforcing headers (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
           } else {
-            return { success: false, message: `Discrepancy: Global headers found, but this specific feature ('${featureKey}') is NOT active.`, raw: `URL: ${url} | Status: ${response.status} | Active Features: ${enforcedFeature}\n\n${headerStr.trim()}` };
+            // Case: Global headers exist but this feature isn't in the active list (intentional non-enforcement)
+            const isEnforcedInUI = featureData?.is_enforced != 0;
+            if (!isEnforcedInUI) {
+              return { success: false, message: `Feature is NOT enforced. Security headers are from other active features.`, raw: `URL: ${url} | Status: ${response.status} | Active Features: ${enforcedFeature}\n\n${headerStr.trim()}` };
+            }
+            return { success: false, message: `Discrepancy: Global headers found, but this specific feature ('${featureKey}') is NOT matching enforcement policy.`, raw: `URL: ${url} | Status: ${response.status} | Active Features: ${enforcedFeature}\n\n${headerStr.trim()}` };
           }
         }
         // If no feature list is provided, we can only verify global enforcement
@@ -972,7 +977,7 @@
     ]);
   };
 
-  const GeneratedInterface = ({ feature, onUpdate, isGuidePanel = false, hideMonitor = false, hideOpNotes = false, hideProtocol = false }) => {
+  const GeneratedInterface = ({ feature, onUpdate, isGuidePanel = false, hideMonitor = false, hideOpNotes = false, hideProtocol = false, globalProtection = true }) => {
     console.log('[VAPT] GeneratedInterface Render:', { key: feature?.key, controls: feature?.generated_schema?.controls, isGuidePanel });
     let schema = feature.generated_schema ? (typeof feature.generated_schema === 'string' ? JSON.parse(feature.generated_schema) : feature.generated_schema) : {};
 
@@ -1021,18 +1026,23 @@
       return toBool(currentVal) && (status.message === __("Removing...", "vaptsecure") || status.message === __("Removed Successfully", "vaptsecure"));
     };
 
+    const isActivelyEnforced = globalProtection ?
+      ((feature.normalized_status || feature.status || 'draft').toLowerCase() === 'release' ?
+        (feature.is_enforced != 0) : (feature.is_enforced == 1))
+      : false;
+
     const renderControl = (control, index) => {
       const { type, label, key, help, options, rows, action } = control;
       const value = currentData[key] !== undefined ? currentData[key] : (control.default || '');
       const uniqueKey = key || `ctrl-${index}`;
-      const isEnforced = feature.is_enforced === true || feature.is_enforced === 1 || feature.is_enforced === '1';
+      const isEnforced = isActivelyEnforced;
       // const conditionalTypes = ['info', 'html', 'warning', 'alert'];
 
       // if (conditionalTypes.includes(type) && isEnforced) return null; // Removed per user request v3.3.9
 
       switch (type) {
         case 'test_action':
-          return el(TestRunnerControl, { key: uniqueKey, control, featureData: currentData, featureKey: feature.key || feature.id });
+          return el(TestRunnerControl, { key: uniqueKey, control, featureData: currentData, featureKey: feature.key || feature.id, globalProtection });
 
         case 'button':
           return el('div', { key: uniqueKey, style: { marginBottom: '15px' } }, [
@@ -1052,6 +1062,7 @@
 
           return el('div', { key: uniqueKey, style: { marginBottom: '15px' } }, [
             el(ToggleControl, {
+              disabled: globalProtection === false,
               label: el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [
                 el('strong', { style: { fontSize: '12px', color: '#334155' } }, safeRender(label)),
                 el(Tooltip, {

@@ -32,12 +32,22 @@ class VAPTSECURE_Enforcer
     if (false === $enforced) {
       global $wpdb;
       $table = $wpdb->prefix . 'vaptsecure_feature_meta';
-      $enforced = $wpdb->get_results("
-        SELECT m.*, s.status 
-        FROM $table m
-        LEFT JOIN {$wpdb->prefix}vaptsecure_feature_status s ON m.feature_key = s.feature_key
-        WHERE m.is_enforced = 1
-      ", ARRAY_A);
+      $is_global = VAPTSECURE_DB::get_global_enforcement();
+
+      if ($is_global) {
+        // [v3.13.20] Global is ON: All Test/Release features UNLESS explicitly disabled (is_enforced = 0)
+        // Plus explicitly enforced ones (is_enforced = 1)
+        $enforced = $wpdb->get_results("
+          SELECT m.*, s.status 
+          FROM $table m
+          LEFT JOIN {$wpdb->prefix}vaptsecure_feature_status s ON m.feature_key = s.feature_key
+          WHERE m.is_enforced = 1 
+             OR (s.status IN ('test', 'release') AND (m.is_enforced IS NULL OR m.is_enforced != 0))
+        ", ARRAY_A);
+      } else {
+        // [v3.13.20] Global is OFF: Total Kill Switch (Return Nothing)
+        $enforced = array();
+      }
       set_transient($cache_key, $enforced, HOUR_IN_SECONDS);
     }
 
@@ -237,7 +247,22 @@ class VAPTSECURE_Enforcer
   {
     global $wpdb;
     $table = $wpdb->prefix . 'vaptsecure_feature_meta';
-    return $wpdb->get_results("SELECT m.*, s.status FROM $table m LEFT JOIN {$wpdb->prefix}vaptsecure_feature_status s ON m.feature_key = s.feature_key WHERE m.is_enforced = 1", ARRAY_A);
+    $is_global = VAPTSECURE_DB::get_global_enforcement();
+
+    if ($is_global) {
+      // [v3.13.20] Global is ON: All Test/Release features UNLESS explicitly disabled (is_enforced = 0)
+      // Plus explicitly enforced ones (is_enforced = 1)
+      return $wpdb->get_results("
+        SELECT m.*, s.status 
+        FROM $table m 
+        LEFT JOIN {$wpdb->prefix}vaptsecure_feature_status s ON m.feature_key = s.feature_key 
+        WHERE m.is_enforced = 1 
+           OR (s.status IN ('test', 'release') AND (m.is_enforced IS NULL OR m.is_enforced != 0))
+      ", ARRAY_A);
+    } else {
+      // [v3.13.20] Global is OFF: Total Kill Switch
+      return array();
+    }
   }
 
   // Helpers for Schema/Impl Resolution

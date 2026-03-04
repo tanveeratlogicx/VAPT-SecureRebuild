@@ -307,7 +307,7 @@
               ]),
               el('p', { style: { margin: '5px 0 0 0', fontSize: '14px', color: '#64748b', fontWeight: 500 } }, [
                 __('Active Threat Protection for ', 'vaptsecure'),
-                el('strong', { style: { color: '#0ea5e9' } }, domain)
+                el('strong', { style: { color: '#0ea5e9' } }, activeDomain)
               ])
             ]),
             el('div', {
@@ -335,17 +335,27 @@
                 checked: globalProtection,
                 disabled: globalSaving,
                 onChange: (val) => {
-                  setGlobalSaving(true);
+                  console.log('VAPT: Global Toggle (Optimistic):', val);
+
+                  // Optimistic Update
+                  const previousState = globalProtection;
+                  setGlobalProtection(val);
+                  setSaveStatus({ message: val ? __('Activating Protection...', 'vaptsecure') : __('Deactivating Protection...', 'vaptsecure'), type: 'info' });
+
                   apiFetch({
                     path: 'vaptsecure/v1/settings/enforcement',
                     method: 'POST',
                     data: { enabled: val }
-                  }).then(() => {
-                    setGlobalProtection(val);
-                    setGlobalSaving(false);
+                  }).then(res => {
+                    console.log('VAPT: Global Toggle Success:', res);
+                    setSaveStatus({ message: __('Settings Saved', 'vaptsecure'), type: 'success' });
                     // Refresh data to show consistency
                     fetchData(true);
-                  }).catch(() => setGlobalSaving(false));
+                  }).catch(err => {
+                    console.error('VAPT: Global Toggle Error:', err);
+                    setGlobalProtection(previousState); // Revert on failure
+                    setSaveStatus({ message: __('Failed to update protection', 'vaptsecure'), type: 'error' });
+                  });
                 }
               })
             ])
@@ -356,7 +366,7 @@
               el(Icon, { icon: 'shield', size: 48, style: { color: '#e2e8f0', marginBottom: '15px' } }),
               el('p', { style: { color: '#64748b', fontSize: '16px' } }, __('No released protections found for this level.', 'vaptsecure'))
             ]) :
-              filteredFeatures.map(f => renderFeatureCard(f, updateFeature, setVerifFeature))
+              filteredFeatures.map(f => renderFeatureCard(f, updateFeature, setVerifFeature, globalProtection))
           )
         ]
       ]),
@@ -398,7 +408,7 @@
     ]);
   };
 
-  const renderFeatureCard = (f, updateFeature, setVerifFeature) => {
+  const renderFeatureCard = (f, updateFeature, setVerifFeature, globalProtection) => {
     const schema = typeof f.generated_schema === 'string' ? JSON.parse(f.generated_schema) : (f.generated_schema || { controls: [] });
 
     const implControls = schema.controls ? schema.controls.filter(c =>
@@ -434,16 +444,6 @@
               )
             ]),
             f.description && el('p', { style: { margin: '6px 0 0 0', fontSize: '12px', color: '#64748b', fontWeight: 500 } }, f.description)
-          ]),
-          el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
-            el('span', { style: { fontSize: '11px', fontWeight: 700, color: globalProtection ? '#64748b' : '#94a3b8', textTransform: 'uppercase', letterSpacing: '0.05em' } }, __('Enforce')),
-            el(ToggleControl, {
-              checked: f.is_enforced != 0,
-              onChange: (val) => updateFeature(f.key, { is_enforced: val ? 1 : 0 }),
-              disabled: !globalProtection,
-              help: !globalProtection ? __('Active only when Global Protection is ON', 'vaptsecure') : '',
-              __nextHasNoMarginBottom: true
-            })
           ])
         ])
       ]),
@@ -457,6 +457,7 @@
             ]),
             implControls.length > 0 ? el(GeneratedInterface, {
               feature: { ...f, generated_schema: { ...schema, controls: implControls } },
+              globalProtection: globalProtection,
               onUpdate: (data) => updateFeature(f.key, { implementation_data: data })
             }) : el('p', { style: { fontSize: '12px', color: '#94a3b8', fontStyle: 'italic' } }, __('Standard protection rules active.'))
           ]),
@@ -468,6 +469,7 @@
             ]),
             automControls.length > 0 ? el(GeneratedInterface, {
               feature: { ...f, generated_schema: { ...schema, controls: automControls } },
+              globalProtection: globalProtection,
               hideOpNotes: true,
               hideProtocol: true,
               onUpdate: (data) => updateFeature(f.key, { implementation_data: data })
