@@ -3,7 +3,7 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           1.52.2
+ * Version:           1.53.0
  * Author:            Tanzeel Malik
  * Author URI:        https://vapt.copilot.com
  * Text Domain:       vaptsecure
@@ -26,7 +26,7 @@ if (file_exists($autoloader)) {
  * The current version of the plugin.
  */
 if (!defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '1.52.2');
+  define('VAPTSECURE_VERSION', '1.53.0');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
