@@ -8,12 +8,36 @@ window.vaptScriptLoaded = true;
   }
 
   const { render, useState, useEffect, useMemo, Fragment, createElement: el } = wp.element || {};
+  const components = wp.components || {};
   const {
     TabPanel, Panel, PanelBody, PanelRow, Button, Dashicon,
     ToggleControl, SelectControl, Modal, TextControl, Spinner,
     Notice, Placeholder, Dropdown, CheckboxControl, BaseControl, Icon,
     TextareaControl, Card, CardHeader, CardBody, Tooltip
-  } = wp.components || {};
+  } = {
+    TabPanel: components.TabPanel || components.__experimentalTabPanel,
+    Panel: components.Panel,
+    PanelBody: components.PanelBody,
+    PanelRow: components.PanelRow,
+    Button: components.Button,
+    Dashicon: components.Dashicon,
+    ToggleControl: components.ToggleControl,
+    SelectControl: components.SelectControl,
+    Modal: components.Modal,
+    TextControl: components.TextControl,
+    Spinner: components.Spinner,
+    Notice: components.Notice,
+    Placeholder: components.Placeholder,
+    Dropdown: components.Dropdown,
+    CheckboxControl: components.CheckboxControl,
+    BaseControl: components.BaseControl,
+    Icon: components.Icon,
+    TextareaControl: components.TextareaControl,
+    Card: components.Card,
+    CardHeader: components.CardHeader,
+    CardBody: components.CardBody,
+    Tooltip: components.Tooltip || components.__experimentalTooltip
+  };
   // Global Settings from wp_localize_script (MOVED TO TOP v3.8.11)
   const settings = window.vaptSecureSettings || {};
   const isSuper = settings.isSuper || false;
@@ -3000,6 +3024,15 @@ window.vaptScriptLoaded = true;
       });
       return usage;
     }, [domains]);
+    const formatDate = (dateString) => {
+      if (!dateString) return '';
+      const date = new Date(dateString);
+      return date.toLocaleDateString('en-US', {
+        month: 'long',
+        day: 'numeric',
+        year: 'numeric'
+      });
+    };
 
     const [formState, setFormState] = useState({
       domain: '',
@@ -3265,15 +3298,6 @@ window.vaptScriptLoaded = true;
       });
     };
 
-    // Helper to format date
-    const formatDate = (dateStr) => {
-      if (!dateStr || dateStr.startsWith('0000')) return __('Never / Invalid', 'vaptsecure');
-      try {
-        return new Date(dateStr).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' });
-      } catch (e) {
-        return dateStr;
-      }
-    };
 
     const toggleSort = (key) => {
       if (sortBy === key) {
@@ -3291,7 +3315,7 @@ window.vaptScriptLoaded = true;
 
     return el('div', { className: 'vapt-license-management-container' }, [
       // Section Header (No collapsible arrow)
-      el('h2', { style: { padding: '16px 16px 0', margin: 0, fontSize: '14px', fontWeight: 600, color: '#1e1e1e' } }, __('License & Subscription Management', 'vaptsecure')),
+      el('h2', { style: { padding: '16px 16px 10px', margin: 0, fontSize: '14px', fontWeight: 600, color: '#1e1e1e' } }, __('License & Subscription Management', 'vaptsecure')),
       // TOP: Two-Column Form Grid
       el('div', { className: 'vapt-license-grid' }, [
         // LEFT: Status Card
@@ -3586,63 +3610,63 @@ window.vaptScriptLoaded = true;
         el('table', { className: 'wp-list-table widefat fixed striped' }, [
           el('thead', null, el('tr', null, [
             el('th', {
-              className: `manage - column sortable ${sortBy === 'license_id' ? 'sorted ' + sortOrder : ''} `,
+              className: `manage-column sortable ${sortBy === 'license_id' ? 'sorted ' + sortOrder : ''}`,
               onClick: () => toggleSort('license_id'),
-              style: { cursor: 'pointer' }
+              style: { cursor: 'pointer', width: '180px', paddingRight: '10px' }
             }, [
               el('span', null, __('License ID', 'vaptsecure')),
               el('span', { className: 'sorting-indicator' })
             ]),
             el('th', {
-              className: `manage - column sortable ${sortBy === 'installation_limit' ? 'sorted ' + sortOrder : ''} `,
+              className: `manage-column sortable ${sortBy === 'installation_limit' ? 'sorted ' + sortOrder : ''}`,
               onClick: () => toggleSort('installation_limit'),
-              style: { cursor: 'pointer', width: '80px' }
+              style: { cursor: 'pointer', width: '20%', paddingRight: '10px' }
             }, [
-              el('span', null, __('Limit', 'vaptsecure')),
+              el('span', null, __('Usage', 'vaptsecure')),
               el('span', { className: 'sorting-indicator' })
             ]),
             el('th', {
-              className: `manage - column column - primary sortable ${sortBy === 'domain' ? 'sorted ' + sortOrder : ''} `,
+              className: `manage-column column-primary sortable ${sortBy === 'domain' ? 'sorted ' + sortOrder : ''}`,
               onClick: () => toggleSort('domain'),
-              style: { cursor: 'pointer' }
+              style: { cursor: 'pointer', width: 'auto', paddingRight: '10px' }
             }, [
               el('span', null, __('Domain', 'vaptsecure')),
               el('span', { className: 'sorting-indicator' })
             ]),
             el('th', {
-              className: `manage - column sortable ${sortBy === 'version' ? 'sorted ' + sortOrder : ''} `,
+              className: `manage-column sortable ${sortBy === 'version' ? 'sorted ' + sortOrder : ''}`,
               onClick: () => toggleSort('version'),
-              style: { cursor: 'pointer' }
+              style: { cursor: 'pointer', width: '70px', paddingRight: '10px' }
             }, [
               el('span', null, __('Version', 'vaptsecure')),
               el('span', { className: 'sorting-indicator' })
             ]),
             el('th', {
-              className: `manage - column sortable ${sortBy === 'license_type' ? 'sorted ' + sortOrder : ''} `,
+              className: `manage-column sortable ${sortBy === 'license_type' ? 'sorted ' + sortOrder : ''}`,
               onClick: () => toggleSort('license_type'),
-              style: { cursor: 'pointer' }
+              style: { cursor: 'pointer', width: '100px', paddingRight: '10px' }
             }, [
               el('span', null, __('License', 'vaptsecure')),
               el('span', { className: 'sorting-indicator' })
             ]),
             el('th', {
-              className: `manage - column sortable ${sortBy === 'first_activated_at' ? 'sorted ' + sortOrder : ''} `,
+              className: `manage-column sortable ${sortBy === 'first_activated_at' ? 'sorted ' + sortOrder : ''}`,
               onClick: () => toggleSort('first_activated_at'),
-              style: { cursor: 'pointer' }
+              style: { cursor: 'pointer', width: '120px', paddingRight: '10px' }
             }, [
               el('span', null, __('Activated At', 'vaptsecure')),
               el('span', { className: 'sorting-indicator' })
             ]),
             el('th', {
-              className: `manage - column sortable ${sortBy === 'manual_expiry_date' ? 'sorted ' + sortOrder : ''} `,
+              className: `manage-column sortable ${sortBy === 'manual_expiry_date' ? 'sorted ' + sortOrder : ''}`,
               onClick: () => toggleSort('manual_expiry_date'),
-              style: { cursor: 'pointer' }
+              style: { cursor: 'pointer', width: '120px', paddingRight: '10px' }
             }, [
               el('span', null, __('Expiry', 'vaptsecure')),
               el('span', { className: 'sorting-indicator' })
             ]),
             el('th', { style: { width: '80px' } }, __('Renewals', 'vaptsecure')),
-            el('th', { style: { width: '80px', textAlign: 'right' } }, __('Actions', 'vaptsecure')),
+            el('th', { style: { width: '140px', textAlign: 'right' } }, __('Action', 'vaptsecure')),
           ])),
           el('tbody', null, sortedDomains.length === 0 ? el('tr', null, el('td', { colSpan: 8 }, __('No domains found.', 'vaptsecure'))) :
             sortedDomains.sort((a, b) => {
@@ -3673,95 +3697,87 @@ window.vaptScriptLoaded = true;
               }
               return 0;
             }).map((dom) => el('tr', { key: dom.id, className: dom.id == selectedDomainId ? 'is-selected' : '' }, [
-              el('td', null, el('code', { style: { fontSize: '11px' } }, dom.license_id || '-')),
-              el('td', null, dom.license_id ? (() => {
-                const usageCount = licenseUsage[dom.license_id] || 0;
+              el('td', { style: { width: '180px', paddingRight: '10px' } }, el('span', { style: { fontFamily: 'monospace', fontSize: '11px', color: '#64748b' } }, dom.license_id || '-')),
+              el('td', { style: { width: '20%', paddingRight: '10px' } }, (dom.license_id) ? (() => {
+                const count = licenseUsage[dom.license_id] || 0;
                 const limit = parseInt(dom.installation_limit) || 1;
-                const isMulti = dom.license_scope === 'multisite';
-                const fillPercent = isMulti ? Math.min(100, Math.round((usageCount / limit) * 100)) : (usageCount > 0 ? 100 : 0);
-                const statusClass = fillPercent >= 100 ? 'danger' : (fillPercent >= 80 ? 'warning' : 'safe');
-
-                return el('div', { style: { display: 'flex', flexDirection: 'column', gap: '4px', width: '100%' } }, [
-                  el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [
-                    el('span', { style: { background: '#f1f5f9', padding: '2px 6px', borderRadius: '4px', fontSize: '10px', fontWeight: 'bold', color: '#334155' } }, `Used: ${usageCount}`),
-                    el(Tooltip, { text: isMulti ? __('Multi-Site', 'vaptsecure') : __('Single Domain', 'vaptsecure') },
-                      el('span', { className: 'dashicons dashicons-networking', style: { fontSize: '14px', color: '#94a3b8' } })
-                    )
+                const percent = Math.min(100, Math.round((count / limit) * 100));
+                const status = percent >= 90 ? 'danger' : (percent >= 70 ? 'warning' : 'safe');
+                return el('div', { className: 'vapt-usage-directory-wrapper' }, [
+                  el('span', { className: 'vapt-usage-count', style: { color: percent >= 90 ? '#ef4444' : '#1e293b' } }, `${count} / ${limit}`),
+                  limit > 1 && el('div', { className: 'vapt-usage-bar-bg', style: { flex: 1, margin: 0 } }, [
+                    el('div', { className: `vapt-usage-bar-fill ${status}`, style: { width: `${percent}%` } })
                   ]),
-                  isMulti && el('div', { className: 'vapt-usage-bar-container' }, [
-                    el('div', { className: `vapt-usage-bar-fill ${statusClass}`, style: { width: `${fillPercent}%` } })
-                  ]),
-                  isMulti && el('div', { className: 'vapt-usage-text' }, [
-                    el('span', null, `${fillPercent}%`),
-                    el('span', null, `Limit: ${limit}`)
-                  ])
+                  limit > 1 && el('span', { className: 'vapt-usage-percent' }, `${percent}%`),
+                  el('span', { className: 'dashicons dashicons-admin-users vapt-usage-icon' })
                 ]);
               })() : '-'),
-              el('td', { className: 'column-primary' }, [
-                el('strong', null, dom.domain),
-                (dom.is_wildcard == 1) && el('span', { style: { marginLeft: '8px', fontSize: '10px', background: '#f0f0f1', padding: '2px 6px', borderRadius: '10px' } }, __('Wildcard', 'vaptsecure')),
+              el('td', { className: 'column-primary', style: { paddingRight: '10px' } }, [
+                el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
+                  el('span', { className: 'dashicons dashicons-networking', style: { color: '#64748b', fontSize: '16px', width: '16px', height: '16px' } }),
+                  el('strong', null, dom.domain),
+                  (dom.is_wildcard == 1) && el('span', { className: 'vapt-license-badge', style: { marginLeft: '4px', background: '#f8fafc', color: '#64748b', border: '1px solid #e2e8f0', fontSize: '9px', padding: '1px 5px' } }, __('Wildcard', 'vaptsecure')),
+                ]),
                 el('button', { type: 'button', className: 'toggle-row' }, el('span', { className: 'screen-reader-text' }, __('Show more details', 'vaptsecure')))
               ]),
-              el('td', { style: { fontWeight: '500', color: '#475569' } }, dom.version || '1.0.0'),
-              el('td', null, el('span', { className: `vapt-license-badge ${dom.license_type || 'standard'}` }, (dom.license_type || 'Standard').toUpperCase())),
-              el('td', null, dom.first_activated_at ? formatDate(dom.first_activated_at) : '-'),
-              el('td', null, dom.license_type === 'developer' ? __('Never', 'vaptsecure') : (dom.manual_expiry_date ? formatDate(dom.manual_expiry_date) : '-')),
-              el('td', null, `${dom.renewals_count || 0} `),
-              el('td', { style: { textAlign: 'right' } }, el('div', { style: { display: 'flex', gap: '5px', justifyContent: 'flex-end', alignItems: 'center' } }, [
-                el(Button, {
-                  isSmall: true,
-                  style: {
-                    padding: '0 8px',
-                    minWidth: '70px',
-                    background: (dom.is_enabled === '0' || dom.is_enabled === 0 || dom.is_enabled === false) ? '#f97316' : '#10b981',
-                    borderColor: (dom.is_enabled === '0' || dom.is_enabled === 0 || dom.is_enabled === false) ? '#ea580c' : '#10b981',
-                    color: '#fff',
-                    fontWeight: 600
-                  },
+              el('td', { style: { fontWeight: '500', color: '#475569', paddingRight: '10px' } }, dom.version || '1.0.0'),
+              el('td', { style: { paddingRight: '10px' } }, el('span', { className: `vapt-license-badge ${dom.license_type || 'standard'}` }, (dom.license_type || 'Standard').toUpperCase())),
+              el('td', { style: { paddingRight: '10px' } }, dom.first_activated_at ? formatDate(dom.first_activated_at) : '-'),
+              el('td', { style: { paddingRight: '10px' } }, dom.license_type === 'developer' ? __('Never', 'vaptsecure') : (dom.manual_expiry_date ? formatDate(dom.manual_expiry_date) : '-')),
+              el('td', { style: { paddingRight: '10px' } }, `${dom.renewals_count || 0} `),
+              el('td', { style: { textAlign: 'right' } }, el('div', { style: { display: 'flex', gap: '8px', justifyContent: 'flex-end', alignItems: 'center' } }, [
+                el('button', {
+                  className: `vapt-status-pill-btn ${(dom.is_enabled === '0' || dom.is_enabled === 0 || dom.is_enabled === false) ? 'inactive' : 'active'}`,
+                  style: (dom.is_enabled !== '0' && dom.is_enabled !== 0 && dom.is_enabled !== false) ? { background: '#dcfce7', color: '#15803d', borderColor: '#bbf7d0', padding: '4px 10px' } : { padding: '4px 10px' },
                   onClick: () => {
                     const nextState = (dom.is_enabled === '0' || dom.is_enabled === 0 || dom.is_enabled === false) ? 1 : 0;
                     addDomain(dom.domain, dom.is_wildcard, nextState, dom.id);
                   }
-                }, (dom.is_enabled === '0' || dom.is_enabled === 0 || dom.is_enabled === false) ? __('Inactive', 'vaptsecure') : __('Active', 'vaptsecure')),
-                isSuper && el(Button, {
-                  isDestructive: true,
-                  isSmall: true,
-                  variant: 'tertiary',
-                  onClick: () => {
-                    globalSetConfirmState({
-                      isOpen: true,
-                      type: 'delete_license',
-                      message: __('Are you sure you want to delete this domain license entirely?', 'vaptsecure'),
-                      isDestructive: true,
-                      onConfirm: () => { deleteDomain(dom.id); globalSetConfirmState(null); }
-                    });
-                  },
-                  isBusy: deletingId === dom.id,
-                  disabled: deletingId === dom.id
-                }, deletingId === dom.id ? __('Deleting...', 'vaptsecure') : __('Delete', 'vaptsecure')),
-                isSuper && dom.manual_expiry_date && el(Button, {
-                  isDestructive: true,
-                  isSmall: true,
-                  style: { marginLeft: '5px' },
-                  onClick: () => {
-                    globalSetConfirmState({
-                      isOpen: true,
-                      type: 'invalidate_license',
-                      message: __('Are you sure you want to invalidate this license? This will instantly trigger the kill-switch on the client side.', 'vaptsecure'),
-                      isDestructive: true,
-                      onConfirm: () => {
-                        apiFetch({
-                          path: 'vaptsecure/v1/domains/update',
-                          method: 'POST',
-                          data: { id: dom.id, action: 'invalidate' }
-                        }).then(() => {
-                          fetchData();
-                          globalSetConfirmState(null);
-                        });
-                      }
-                    });
-                  }
-                }, __('Invalidate', 'vaptsecure'))
+                }, [
+                  el('span', { className: `dashicons dashicons-${(dom.is_enabled === '0' || dom.is_enabled === 0 || dom.is_enabled === false) ? 'no-alt' : 'yes'}`, style: { fontSize: '14px', marginRight: '4px' } }),
+                  (dom.is_enabled === '0' || dom.is_enabled === 0 || dom.is_enabled === false) ? __('INACTIVE', 'vaptsecure') : __('ACTIVE', 'vaptsecure')
+                ]),
+                el(Tooltip, { text: __('Delete Domain License', 'vaptsecure') },
+                  el('button', {
+                    className: 'vapt-elite-action-btn delete',
+                    style: { color: '#94a3b8', background: 'none', border: 'none', padding: 0 },
+                    disabled: deletingId === dom.id,
+                    onClick: () => {
+                      globalSetConfirmState({
+                        isOpen: true,
+                        type: 'delete_license',
+                        message: __('Are you sure you want to delete this domain license entirely?', 'vaptsecure'),
+                        isDestructive: true,
+                        onConfirm: () => { deleteDomain(dom.id); globalSetConfirmState(null); }
+                      });
+                    }
+                  }, el('span', { className: `dashicons dashicons-${deletingId === dom.id ? 'update' : 'trash'}`, style: { fontSize: '18px' } }))
+                ),
+                el(Tooltip, { text: __('Invalidate License', 'vaptsecure') },
+                  el('button', {
+                    className: 'vapt-elite-action-btn',
+                    style: { color: '#94a3b8', background: 'none', border: 'none', padding: 0 },
+                    disabled: !dom.manual_expiry_date,
+                    onClick: () => {
+                      globalSetConfirmState({
+                        isOpen: true,
+                        type: 'invalidate_license',
+                        message: __('Are you sure you want to invalidate this license? This will instantly trigger the kill-switch on the client side.', 'vaptsecure'),
+                        isDestructive: true,
+                        onConfirm: () => {
+                          apiFetch({
+                            path: 'vaptsecure/v1/domains/update',
+                            method: 'POST',
+                            data: { id: dom.id, action: 'invalidate' }
+                          }).then(() => {
+                            fetchData();
+                            globalSetConfirmState(null);
+                          });
+                        }
+                      });
+                    }
+                  }, el('span', { className: 'dashicons dashicons-lock', style: { fontSize: '18px' } }))
+                )
               ]))
             ]))
           )
@@ -5206,11 +5222,19 @@ window.vaptScriptLoaded = true;
       });
     };
 
-    const deleteDomain = (domainId) => {
+    const [deletingId, setDeletingId] = useState(null);
+
+    const deleteDomain = (id) => {
+      setDeletingId(id);
       apiFetch({
-        path: `vaptsecure/v1/domains/delete?id=${domainId}`,
+        path: `vaptsecure/v1/domains/delete/${id}`,
         method: 'DELETE'
-      }).then(() => fetchData());
+      }).then(() => {
+        fetchData();
+        setDeletingId(null);
+      }).catch(() => {
+        setDeletingId(null);
+      });
     };
 
     const batchDeleteDomains = (ids) => {
@@ -5556,7 +5580,16 @@ window.vaptScriptLoaded = true;
             sortSourceDirection,
             setSortSourceDirection
           });
-          case 'license': return el(LicenseManager, { domains, fetchData, isSuper, loading });
+          case 'license': return el(LicenseManager, {
+            domains,
+            fetchData,
+            isSuper,
+            loading,
+            addDomain,
+            deleteDomain,
+            globalSetConfirmState: setConfirmState,
+            deletingId
+          });
           case 'domains': return el(DomainFeatures, { domains, features, isDomainModalOpen, selectedDomain, setDomainModalOpen, setSelectedDomain, updateDomainFeatures, addDomain, deleteDomain, batchDeleteDomains, setConfirmState, selectedDomains, setSelectedDomains, dataFiles, selectedFile, onSelectFile });
           case 'build': return el(BuildGenerator, { domains, features, activeFile: selectedFile, setAlertState });
           default: return null;
