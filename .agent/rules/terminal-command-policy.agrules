@@ -1,0 +1,23 @@
+# Terminal Command Auto-Approval Policy
+
+## Overview
+This rule grants the assistant the ability to automatically run terminal commands that are NOT explicitly denied. This improves efficiency while maintaining security for sensitive operations.
+
+## Auto-Approval Logic
+1.  **Check Deny List**: Before proposing any command with `SafeToAutoRun: true`, the assistant MUST check [deny-list.md](file:///t:/~/Local925%20Sites/hermasnet/app/public/wp-content/plugins/VAPT-Secure/.agent/rules/deny-list.md).
+2.  **Deny Match**: If the command matches any pattern in the Deny List, it MUST be proposed with `SafeToAutoRun: false`.
+3.  **Allow Default**: If the command does NOT match the Deny List, it SHOULD be proposed with `SafeToAutoRun: true`.
+4.  **Notification Requirement**: Whenever a command is auto-run, the assistant MUST mention it in the `TaskStatus` or as a note in the chat (e.g., "Auto-running: git status").
+
+## "Intelligent" Updates
+1.  **Manual Approval Learning**: If the assistant proposes a command with `SafeToAutoRun: false` and the user approves it, the assistant SHOULD:
+    -   Check if the command is in `deny-list.md`.
+    -   If NOT in the Deny List, append the exact command to [allow-list.md](file:///t:/~/Local925%20Sites/hermasnet/app/public/wp-content/plugins/VAPT-Secure/.agent/rules/allow-list.md) for future reference.
+2.  **User Request Implementation**: If the user explicitly asks "Add [command] to the allow list", the assistant MUST:
+    -   Verify the command is NOT in `deny-list.md`.
+    -   Append the command to [allow-list.md](file:///t:/~/Local925%20Sites/hermasnet/app/public/wp-content/plugins/VAPT-Secure/.agent/rules/allow-list.md).
+    -   Notify the user once it has been added.
+
+## Example
+- `git status` -> No match in Deny List -> `SafeToAutoRun: true`.
+- `rm -rf .git` -> Matches `rm` in Deny List -> `SafeToAutoRun: false`.
