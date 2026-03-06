@@ -3,7 +3,7 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           2.2.2
+ * Version:           2.2.5
  * Author:            Tanzeel Malik
  * Author URI:        https://vapt.copilot.com
  * License:           GPL-2.0+
@@ -26,7 +26,7 @@ if (file_exists(dirname(__FILE__) . '/vendor/autoload.php')) {
  * Define Paths & Constants
  */
 if (!defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '2.2.2');
+  define('VAPTSECURE_VERSION', '2.2.5');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
@@ -211,11 +211,15 @@ function vaptsecure_activate_plugin()
         include_verification_guidance TINYINT(1) DEFAULT 1,
         include_manual_protocol TINYINT(1) DEFAULT 1,
         include_operational_notes TINYINT(1) DEFAULT 1,
-        is_enforced TINYINT(1) DEFAULT 0,
         wireframe_url TEXT DEFAULT NULL,
         generated_schema LONGTEXT DEFAULT NULL,
         implementation_data LONGTEXT DEFAULT NULL,
         dev_instruct LONGTEXT DEFAULT NULL,
+        is_adaptive_deployment TINYINT(1) DEFAULT 0,
+        override_schema LONGTEXT DEFAULT NULL,
+        override_implementation_data LONGTEXT DEFAULT NULL,
+        is_enabled TINYINT(1) DEFAULT 0,
+        is_enforced TINYINT(1) DEFAULT 0,
         PRIMARY KEY  (feature_key)
     ) $charset_collate;";
   // Feature History/Audit Table
@@ -269,6 +273,31 @@ function vaptsecure_activate_plugin()
   $existing_version = get_option('vaptsecure_version');
   if (empty($existing_version)) {
     vaptsecure_send_activation_email();
+  }
+
+  // Run manual DB fix to add missing columns
+  vaptsecure_manual_db_fix();
+}
+
+/**
+ * Manual Database Fix / Migrations
+ * Ensures new columns are added to existing tables.
+ */
+function vaptsecure_manual_db_fix()
+{
+  global $wpdb;
+  $table_name = $wpdb->prefix . 'vaptsecure_feature_meta';
+
+  // Check and add is_enabled if missing
+  $column = $wpdb->get_results($wpdb->prepare("SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s", DB_NAME, $table_name, 'is_enabled'));
+  if (empty($column)) {
+    $wpdb->query("ALTER TABLE $table_name ADD COLUMN is_enabled TINYINT(1) DEFAULT 0");
+  }
+
+  // Check and add is_enforced if missing
+  $column = $wpdb->get_results($wpdb->prepare("SELECT * FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = %s AND TABLE_NAME = %s AND COLUMN_NAME = %s", DB_NAME, $table_name, 'is_enforced'));
+  if (empty($column)) {
+    $wpdb->query("ALTER TABLE $table_name ADD COLUMN is_enforced TINYINT(1) DEFAULT 0");
   }
 }
 
@@ -351,18 +380,11 @@ if (! function_exists('vaptsecure_manual_db_fix')) {
         $wpdb->query("ALTER TABLE {$meta_table} ADD COLUMN wireframe_url TEXT DEFAULT NULL");
       }
       echo '<div class="notice notice-success"><p>Database migration complete. Statuses normalized to Draft, Develop, Release.</p></div>';
-      // 4. Force add is_enforced column
+      // 4. Force drop is_enforced column (deprecated)
       $table_meta = $wpdb->prefix . 'vaptsecure_feature_meta';
       $col_enforced = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$table_meta} LIKE %s", 'is_enforced'));
-      if (empty($col_enforced)) {
-        $wpdb->query("ALTER TABLE {$table_meta} ADD COLUMN is_enforced TINYINT(1) DEFAULT 1");
-        // Migration: Enable by default for existing records
-        // $wpdb->query("UPDATE {$table_meta} SET is_enforced = 1 WHERE is_enforced IS NULL OR is_enforced = 0");
-      } else {
-        // Migration: Update default for existing column
-        $wpdb->query("ALTER TABLE {$table_meta} ALTER COLUMN is_enforced SET DEFAULT 1");
-        // Migration: Force enable '0' or NULL values based on user request ("Protection should work out of the box")
-        // $wpdb->query("UPDATE {$table_meta} SET is_enforced = 1 WHERE is_enforced IS NULL OR is_enforced = 0");
+      if (!empty($col_enforced)) {
+        $wpdb->query("ALTER TABLE {$table_meta} DROP COLUMN is_enforced");
       }
       // 5. Force add assigned_to column
       $col_assigned = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$status_table} LIKE %s", 'assigned_to'));
@@ -394,9 +416,20 @@ if (! function_exists('vaptsecure_manual_db_fix')) {
       if (empty($col_notes)) {
         $wpdb->query("ALTER TABLE {$meta_table} ADD COLUMN include_operational_notes TINYINT(1) DEFAULT 1");
       }
-      $col_dev = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$meta_table} LIKE %s", 'dev_instruct'));
       if (empty($col_dev)) {
         $wpdb->query("ALTER TABLE {$meta_table} ADD COLUMN dev_instruct LONGTEXT DEFAULT NULL");
+      }
+      $col_adaptive = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$meta_table} LIKE %s", 'is_adaptive_deployment'));
+      if (empty($col_adaptive)) {
+        $wpdb->query("ALTER TABLE {$meta_table} ADD COLUMN is_adaptive_deployment TINYINT(1) DEFAULT 0");
+      }
+      $col_ov_schema = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$meta_table} LIKE %s", 'override_schema'));
+      if (empty($col_ov_schema)) {
+        $wpdb->query("ALTER TABLE {$meta_table} ADD COLUMN override_schema LONGTEXT DEFAULT NULL");
+      }
+      $col_ov_impl = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$meta_table} LIKE %s", 'override_implementation_data'));
+      if (empty($col_ov_impl)) {
+        $wpdb->query("ALTER TABLE {$meta_table} ADD COLUMN override_implementation_data LONGTEXT DEFAULT NULL");
       }
       $col_enabled = $wpdb->get_results($wpdb->prepare("SHOW COLUMNS FROM {$table} LIKE %s", 'is_enabled'));
       if (empty($col_enabled)) {
@@ -437,7 +470,7 @@ if (! function_exists('vaptsecure_manual_db_fix')) {
         ) $charset_collate;";
       dbDelta($table_security_events);
 
-      $msg = "Database schema updated (History Table + Security Events + assigned_to + is_enforced + Status Enum + Manual Expiry + Generated Schema + Implementation Data + Domain Enabled + Robust ID column + License Scope + Inst. Limit).";
+      $msg = "Database schema updated (History Table + Security Events + assigned_to + Status Enum + Manual Expiry + Generated Schema + Implementation Data + Domain Enabled + Robust ID column + License Scope + Inst. Limit + Removed is_enforced).";
       wp_die(sprintf("<h1>VAPT Secure Database Updated</h1><p>Schema refresh run. %s</p><p>Please go back to the dashboard.</p>", esc_html($msg)));
     }
   }
@@ -704,7 +737,13 @@ function vaptsecure_enqueue_admin_assets($hook)
         const originalApiFetch = wp.apiFetch;
 
         const patchedApiFetch = (args) => {
+          const settings = window.vaptSecureSettings || {};
           const home = '{$home_url}';
+          
+          // 🛡️ AUTH PERI-FIX: Ensure Nonce is present for non-GET requests
+          if (settings.nonce && args.method && args.method !== 'GET') {
+            args.headers = Object.assign({}, args.headers || {}, { 'X-WP-Nonce': settings.nonce });
+          }
           
           const getFallbackUrl = (pathOrUrl) => {
             if (!pathOrUrl) return null;
@@ -714,7 +753,8 @@ function vaptsecure_enqueue_admin_assets($hook)
             const cleanHome = home.replace(/\/$/, '');
             const cleanPath = path.replace(/^\//, '').split('?')[0];
             const queryParams = path.includes('?') ? '&' + path.split('?')[1] : '';
-            return cleanHome + '/?rest_route=/' + cleanPath + queryParams;
+            const nonceParam = settings.nonce ? '&_wpnonce=' + settings.nonce : '';
+            return cleanHome + '/?rest_route=/' + cleanPath + queryParams + nonceParam;
           };
 
           // 🛡️ INSTANT Pre-emptive Fallback if we already know REST is broken

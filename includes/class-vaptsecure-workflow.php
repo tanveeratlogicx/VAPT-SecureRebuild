@@ -90,8 +90,7 @@ class VAPTSECURE_Workflow
         'generated_schema' => null,
         'implementation_data' => null,
         'override_schema' => null,
-        'override_implementation_data' => null,
-        'is_enforced' => 0
+        'override_implementation_data' => null
       ), array('feature_key' => $feature_key));
     }
 
@@ -164,7 +163,6 @@ class VAPTSECURE_Workflow
         'total_history_records' => 0,
         'total_with_schema' => 0,
         'total_with_impl' => 0,
-        'total_enforced' => 0,
         'broken_count' => count($broken_features ?: array()),
         'develop_count' => count($develop_features ?: array()),
         'message' => 'No features in Develop status to revert.'
@@ -185,7 +183,7 @@ class VAPTSECURE_Workflow
 
     // 5. Check which features have implementation data
     $impl_data = $wpdb->get_results(
-      "SELECT feature_key, generated_schema IS NOT NULL as has_schema, implementation_data IS NOT NULL as has_impl, is_enforced 
+      "SELECT feature_key, generated_schema IS NOT NULL as has_schema, implementation_data IS NOT NULL as has_impl 
        FROM $table_meta WHERE feature_key IN ($prepared_in)",
       OBJECT_K
     );
@@ -207,7 +205,6 @@ class VAPTSECURE_Workflow
         'history_records' => isset($history_counts[$key]) ? (int) $history_counts[$key]->count : 0,
         'has_generated_schema' => isset($impl_data[$key]) && (bool) $impl_data[$key]->has_schema,
         'has_implementation_data' => isset($impl_data[$key]) && (bool) $impl_data[$key]->has_impl,
-        'is_enforced' => isset($impl_data[$key]) && (bool) $impl_data[$key]->is_enforced,
       );
     }
 
@@ -224,9 +221,6 @@ class VAPTSECURE_Workflow
       })),
       'total_with_impl' => count(array_filter($preview, function ($f) {
         return $f['has_implementation_data'];
-      })),
-      'total_enforced' => count(array_filter($preview, function ($f) {
-        return $f['is_enforced'];
       })),
     );
   }

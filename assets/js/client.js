@@ -453,7 +453,7 @@
           el('div', { style: { padding: '25px', background: '#fcfdfd', borderRight: '1px solid #f1f5f9' } }, [
             el('h4', { style: { fontSize: '11px', fontWeight: 800, marginBottom: '20px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' } }, [
               el(Icon, { icon: 'admin-settings', size: 16 }),
-              __('Security Configuration')
+              __('Functional Implementation')
             ]),
             implControls.length > 0 ? el(GeneratedInterface, {
               feature: { ...f, generated_schema: { ...schema, controls: implControls } },
@@ -465,7 +465,7 @@
           el('div', { style: { padding: '25px', background: '#f8fafc' } }, [
             el('h4', { style: { fontSize: '11px', fontWeight: 800, marginBottom: '20px', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: '6px' } }, [
               el(Icon, { icon: 'shield', size: 16 }),
-              __('Verification Engine')
+              __('Automated Verification Engine')
             ]),
             automControls.length > 0 ? el(GeneratedInterface, {
               feature: { ...f, generated_schema: { ...schema, controls: automControls } },

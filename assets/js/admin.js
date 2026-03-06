@@ -49,6 +49,11 @@ window.vaptScriptLoaded = true;
     const originalApiFetch = wp.apiFetch;
 
     const patchedApiFetch = (args) => {
+      // 🛡️ AUTH PERI-FIX: Ensure Nonce is present for non-GET requests
+      if (settings.nonce && args.method && args.method !== 'GET') {
+        args.headers = Object.assign({}, args.headers || {}, { 'X-WP-Nonce': settings.nonce });
+      }
+
       const getFallbackUrl = (pathOrUrl) => {
         if (!pathOrUrl) return null;
         const path = typeof pathOrUrl === 'string' && pathOrUrl.includes('/wp-json/')
@@ -57,7 +62,8 @@ window.vaptScriptLoaded = true;
         const cleanHome = settings.homeUrl.replace(/\/$/, '');
         const cleanPath = path.replace(/^\//, '').split('?')[0];
         const queryParams = path.includes('?') ? '&' + path.split('?')[1] : '';
-        return cleanHome + '/?rest_route=/' + cleanPath + queryParams;
+        const nonceParam = settings.nonce ? '&_wpnonce=' + settings.nonce : '';
+        return cleanHome + '/?rest_route=/' + cleanPath + queryParams + nonceParam;
       };
 
       // 🛡️ Pre-emptive Fallback if we already know REST is broken
@@ -5502,21 +5508,6 @@ window.vaptScriptLoaded = true;
 
         // Right Column: Badges + Batch Revert
         el('div', { style: { display: 'flex', alignItems: 'center', gap: '10px' } }, [
-          isSuper && el('span', {
-            style: {
-              fontSize: '10px',
-              color: '#fff',
-              background: '#1e3a8a',
-              padding: '4px 8px',
-              borderRadius: '5px',
-              fontWeight: '600',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              verticalAlign: 'middle',
-              display: 'none',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-            }
-          }, 'SUPERADMIN'),
           // v1.9.2 – Batch Revert to Draft button
           isSuper && el(Tooltip, { text: __('Revert all features in Develop status back to Draft. This will delete all history and implementation data.', 'vaptsecure') },
             el(Button, {

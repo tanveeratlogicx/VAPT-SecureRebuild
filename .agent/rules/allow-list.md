@@ -15,3 +15,5 @@ Even if a command is not here, it will be auto-run unless it matches the Deny Li
 - `ls`
 - `dir`
 - `pwd`
+- `tail`
+- `grep`

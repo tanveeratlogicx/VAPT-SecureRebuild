@@ -224,12 +224,21 @@ class VAPTSECURE_REST
 
   public function check_permission()
   {
-    return is_vaptsecure_superadmin();
+    $is_super = is_vaptsecure_superadmin();
+    if (!$is_super) {
+      error_log("VAPTSECURE_REST: check_permission FAILED for user " . get_current_user_id());
+    }
+    return $is_super;
   }
 
   public function check_read_permission()
   {
-    return is_vaptsecure_superadmin() || current_user_can('manage_options');
+    $is_super = is_vaptsecure_superadmin();
+    $can_manage = current_user_can('manage_options');
+    if (!$is_super && !$can_manage) {
+      error_log("VAPTSECURE_REST: check_read_permission FAILED for user " . get_current_user_id());
+    }
+    return $is_super || $can_manage;
   }
 
   public function get_features($request)
@@ -452,6 +461,8 @@ class VAPTSECURE_REST
           if (!empty($meta['operational_notes_content'])) {
             $feature['operational_notes'] = $meta['operational_notes_content'];
           }
+          $feature['is_enabled'] = isset($meta['is_enabled']) ? (bool)$meta['is_enabled'] : false;
+          $feature['is_enforced'] = isset($meta['is_enforced']) ? (bool)$meta['is_enforced'] : false;
         }
 
         $merged_features[$dedupe_key] = $feature;
@@ -599,7 +610,6 @@ class VAPTSECURE_REST
     $status = $request->get_param('status');
     $include_test = $request->get_param('include_test_method');
     $include_verification = $request->get_param('include_verification');
-    $is_enforced = $request->get_param('is_enforced');
     $wireframe_url = $request->get_param('wireframe_url');
     $generated_schema = $request->get_param('generated_schema');
     $implementation_data = $request->get_param('implementation_data');
@@ -627,13 +637,14 @@ class VAPTSECURE_REST
     $include_verification_guidance = $request->get_param('include_verification_guidance');
     if ($include_verification_guidance !== null) $meta_updates['include_verification_guidance'] = $include_verification_guidance ? 1 : 0;
 
-    $include_manual_protocol = $request->get_param('include_manual_protocol');
-    if ($include_manual_protocol !== null) $meta_updates['include_manual_protocol'] = $include_manual_protocol ? 1 : 0;
-
     $include_operational_notes = $request->get_param('include_operational_notes');
     if ($include_operational_notes !== null) $meta_updates['include_operational_notes'] = $include_operational_notes ? 1 : 0;
 
-    if ($is_enforced !== null) $meta_updates['is_enforced'] = $is_enforced ? 1 : 0;
+    $is_enabled_param = $request->get_param('is_enabled');
+    if ($is_enabled_param !== null) $meta_updates['is_enabled'] = $is_enabled_param ? 1 : 0;
+
+    $is_enforced_param = $request->get_param('is_enforced');
+    if ($is_enforced_param !== null) $meta_updates['is_enforced'] = $is_enforced_param ? 1 : 0;
 
     $is_adaptive = $request->get_param('is_adaptive_deployment');
     if ($is_adaptive !== null) $meta_updates['is_adaptive_deployment'] = $is_adaptive ? 1 : 0;
@@ -770,7 +781,11 @@ class VAPTSECURE_REST
     }
 
     if (! empty($meta_updates)) {
+      global $wpdb;
       VAPTSECURE_DB::update_feature_meta($key, $meta_updates);
+      if ($wpdb->last_error) {
+        error_log("[VAPT Error] DB Update Failed for $key: " . $wpdb->last_error);
+      }
       do_action('vaptsecure_feature_saved', $key, $meta_updates);
     }
 
@@ -1069,7 +1084,7 @@ class VAPTSECURE_REST
     // Check database directly
     $table = $wpdb->prefix . 'vaptsecure_feature_meta';
     $db_results = $wpdb->get_results("
-      SELECT m.feature_key, m.implementation_data, m.is_enforced, s.status
+      SELECT m.feature_key, m.implementation_data, s.status
       FROM $table m
       LEFT JOIN {$wpdb->prefix}vaptsecure_feature_status s ON m.feature_key = s.feature_key
       WHERE m.implementation_data IS NOT NULL 
@@ -1078,22 +1093,12 @@ class VAPTSECURE_REST
         AND m.implementation_data != 'null'
     ", ARRAY_A);
 
-    // Check all features with is_enforced = 1
-    $enforced_features = $wpdb->get_results("
-      SELECT m.feature_key, m.implementation_data, m.is_enforced, s.status
-      FROM $table m
-      LEFT JOIN {$wpdb->prefix}vaptsecure_feature_status s ON m.feature_key = s.feature_key
-      WHERE m.is_enforced = 1
-    ", ARRAY_A);
-
     return new WP_REST_Response(array(
       'cache_exists' => $cached !== false,
       'cache_count' => is_array($cached) ? count($cached) : 0,
       'cache_keys' => is_array($cached) ? array_column($cached, 'feature_key') : [],
       'db_count' => count($db_results),
       'db_keys' => array_column($db_results, 'feature_key'),
-      'enforced_flag_count' => count($enforced_features),
-      'enforced_flag_keys' => array_column($enforced_features, 'feature_key'),
       'db_results' => $db_results,
     ), 200);
   }

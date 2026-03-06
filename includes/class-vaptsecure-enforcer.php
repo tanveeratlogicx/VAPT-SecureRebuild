@@ -35,14 +35,12 @@ class VAPTSECURE_Enforcer
       $is_global = VAPTSECURE_DB::get_global_enforcement();
 
       if ($is_global) {
-        // [v3.13.20] Global is ON: All Test/Release features UNLESS explicitly disabled (is_enforced = 0)
         // Plus explicitly enforced ones (is_enforced = 1)
         $enforced = $wpdb->get_results("
           SELECT m.*, s.status 
           FROM $table m
           LEFT JOIN {$wpdb->prefix}vaptsecure_feature_status s ON m.feature_key = s.feature_key
-          WHERE m.is_enforced = 1 
-             OR (s.status IN ('test', 'release') AND (m.is_enforced IS NULL OR m.is_enforced != 0))
+          WHERE s.status IN ('develop', 'release', 'test')
         ", ARRAY_A);
       } else {
         // [v3.13.20] Global is OFF: Total Kill Switch (Return Nothing)
@@ -250,14 +248,12 @@ class VAPTSECURE_Enforcer
     $is_global = VAPTSECURE_DB::get_global_enforcement();
 
     if ($is_global) {
-      // [v3.13.20] Global is ON: All Test/Release features UNLESS explicitly disabled (is_enforced = 0)
       // Plus explicitly enforced ones (is_enforced = 1)
       return $wpdb->get_results("
         SELECT m.*, s.status 
         FROM $table m 
         LEFT JOIN {$wpdb->prefix}vaptsecure_feature_status s ON m.feature_key = s.feature_key 
-        WHERE m.is_enforced = 1 
-           OR (s.status IN ('test', 'release') AND (m.is_enforced IS NULL OR m.is_enforced != 0))
+        WHERE s.status IN ('develop', 'release', 'test')
       ", ARRAY_A);
     } else {
       // [v3.13.20] Global is OFF: Total Kill Switch

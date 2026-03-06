@@ -683,41 +683,13 @@
    * Sync/Async Toggle Component (v3.5.2)
    * Stateful toggle for execution mode
    */
-  const SyncAsyncToggle = ({ isAsync, onChange, disabled }) => {
-    return el('div', {
-      className: 'vapt-sync-async-toggle',
-      style: { display: 'flex', alignItems: 'center', gap: '6px' }
-    }, [
-      el(Tooltip, { text: isAsync ? __('Async: Runs via background process (Simulated)', 'vaptsecure') : __('Sync: Runs directly in browser session', 'vaptsecure') },
-        el(Button, {
-          isSmall: true,
-          variant: 'tertiary',
-          onClick: () => !disabled && onChange(!isAsync),
-          disabled: disabled,
-          style: {
-            fontSize: '10px',
-            padding: '0 4px',
-            height: '20px',
-            minHeight: '20px',
-            color: isAsync ? '#7c3aed' : '#0f172a',
-            borderColor: isAsync ? '#ddd6fe' : '#e2e8f0',
-            background: isAsync ? '#f5f3ff' : '#f8fafc'
-          }
-        }, [
-          el(Icon, { icon: isAsync ? 'update' : 'controls-repeat', size: 12, style: { marginRight: '4px' } }),
-          isAsync ? 'ASYNC PROCESSED' : 'SYNC'
-        ])
-      )
-    ]);
-  };
+
 
   const TestRunnerControl = ({ control, featureData, featureKey }) => {
     const [status, setStatus] = useState('idle');
     const [result, setResult] = useState(null);
     const [progress, setProgress] = useState(null);
     const [numTests, setNumTests] = useState(''); // Custom test count (v3.6.26)
-    // Stateful toggle (Default false/Sync)
-    const [isAsync, setIsAsync] = useState(false);
 
     const runTest = async () => {
       setStatus('running');
@@ -731,9 +703,8 @@
         const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Test timeout after 120 seconds')), 120000)
         );
-        // Pass isAsync and progress callback to handler (v3.6.25)
         // Also pass custom numTests (v3.6.26)
-        const handlerPromise = handler(siteUrl, { ...control, isAsync, numTests }, featureData, featureKey, (p) => {
+        const handlerPromise = handler(siteUrl, { ...control, isAsync: false, numTests }, featureData, featureKey, (p) => {
           setProgress(p);
         });
         const res = await Promise.race([handlerPromise, timeoutPromise]);
@@ -775,9 +746,7 @@
     return el('div', { className: 'vapt-test-runner', style: { padding: '15px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '6px', marginBottom: '10px' } }, [
       el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2px' } }, [
         el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } }, [
-          el('strong', { style: { fontSize: '12px', color: '#334155' } }, displayLabel),
-          // Inject Sync/Async Toggle
-          el(SyncAsyncToggle, { isAsync, onChange: setIsAsync, disabled: status === 'running' })
+          el('strong', { style: { fontSize: '12px', color: '#334155' } }, displayLabel)
         ]),
         el(Button, { isSecondary: true, isSmall: true, isBusy: status === 'running', onClick: handleClick, disabled: status === 'running' }, 'Run Verify')
       ]),
@@ -1009,12 +978,11 @@
     const isRateLimit = feature.key?.includes('limit') || feature.key?.includes('brute') ||
       (schema.enforcement?.mappings && Object.values(schema.enforcement.mappings).includes('limit_login_attempts'));
 
-
+    // v3.14.1 - Reverted to onUpdate-only to allow Workbench.js to handle saves
     const handleChange = (key, value) => {
-      const updated = { ...currentData, [key]: value };
-      if (onUpdate) onUpdate(updated);
+      const updatedData = { ...currentData, [key]: value };
+      if (onUpdate) onUpdate(updatedData);
     };
-
     const toBool = (val) => {
       if (val === true || val === 1 || val === '1' || val === 'true' || val === 'on') return true;
       return false;

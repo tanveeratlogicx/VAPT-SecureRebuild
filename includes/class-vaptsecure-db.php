@@ -104,34 +104,45 @@ class VAPTSECURE_DB
       'include_verification_guidance' => '%d',
       'include_manual_protocol'       => '%d',
       'include_operational_notes'     => '%d',
-      'is_enforced'                   => '%d',
       'wireframe_url'                 => '%s',
       'generated_schema'              => '%s',
       'implementation_data'           => '%s',
-      'dev_instruct'                  => '%s'
+      'dev_instruct'                  => '%s',
+      'is_adaptive_deployment'        => '%d',
+      'override_schema'               => '%s',
+      'override_implementation_data'  => '%s',
+      'is_enabled'                    => '%d',
+      'is_enforced'                   => '%d'
     );
 
-    // 2. Fetch existing to merge
-    $existing = self::get_feature_meta($key);
-    $merged_data = $existing ? array_merge($existing, $data) : $data;
-
-    // Ensure key is set
-    $merged_data['feature_key'] = $key;
-
-    // 3. Construct Query Data explicitly in order
-    $final_data = array();
-    $formats = array();
+    // 2. Filter data against actual database columns (Self-Healing)
+    $existing_cols = $wpdb->get_col("DESCRIBE $table", 0);
+    $final_data = array('feature_key' => $key);
+    $formats = array('%s');
 
     foreach ($schema_map as $col => $fmt) {
-      if (array_key_exists($col, $merged_data)) {
-        $final_data[$col] = $merged_data[$col];
+      if ($col === 'feature_key') continue;
+      if (isset($data[$col]) && in_array($col, $existing_cols)) {
+        $final_data[$col] = $data[$col];
         $formats[] = $fmt;
-      } else {
-        // If missing in data/existing, set default based on type
-        // This handles fresh inserts where $existing is null
-        if ($col === 'feature_key') {
-          $final_data[$col] = $key;
-        } else {
+      }
+    }
+
+    // 3. Fetch existing to merge (but only for columns that exist)
+    $existing = self::get_feature_meta($key);
+    if ($existing) {
+      foreach ($existing as $k => $v) {
+        if (!isset($final_data[$k]) && in_array($k, $existing_cols)) {
+          $final_data[$k] = $v;
+          $formats[] = isset($schema_map[$k]) ? $schema_map[$k] : '%s';
+        }
+      }
+    } else {
+      // If no existing record, apply defaults for columns not provided in $data
+      foreach ($schema_map as $col => $fmt) {
+        if ($col === 'feature_key') continue; // Already handled
+        if (!isset($final_data[$col]) && in_array($col, $existing_cols)) {
+          // Set default based on type
           $final_data[$col] = ($fmt === '%d') ? 0 : null;
           // Special defaults
           if (in_array($col, ['include_verification_guidance', 'include_manual_protocol', 'include_operational_notes'])) {
@@ -348,13 +359,13 @@ class VAPTSECURE_DB
 
     $top_risk = $wpdb->get_row("SELECT feature_key, COUNT(*) as count FROM $table GROUP BY feature_key ORDER BY count DESC LIMIT 1", ARRAY_A);
 
-    $active_enforcements = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}vaptsecure_feature_meta WHERE is_enforced = 1");
+    $active_features = $wpdb->get_var("SELECT COUNT(*) FROM {$wpdb->prefix}vaptsecure_feature_status WHERE status IN ('Release', 'Develop', 'Test')");
 
     return array(
       'total_blocks' => (int) $total_blocks,
       'blocks_24h'   => (int) $blocks_24h,
       'top_risk'     => $top_risk ? $top_risk['feature_key'] : __('None', 'vaptsecure'),
-      'active_enforcements' => (int) $active_enforcements
+      'active_enforcements' => (int) $active_features
     );
   }
 

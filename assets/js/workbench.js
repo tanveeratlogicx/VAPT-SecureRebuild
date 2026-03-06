@@ -14,6 +14,11 @@
     let localBroken = localStorage.getItem('vaptsecure_rest_broken') === '1';
     const originalApiFetch = wp.apiFetch;
     const patchedApiFetch = (args) => {
+      // 🛡️ AUTH PERI-FIX: Ensure Nonce is present for non-GET requests
+      if (settings.nonce && args.method && args.method !== 'GET') {
+        args.headers = Object.assign({}, args.headers || {}, { 'X-WP-Nonce': settings.nonce });
+      }
+
       const getFallbackUrl = (pathOrUrl) => {
         if (!pathOrUrl) return null;
         const path = typeof pathOrUrl === 'string' && pathOrUrl.includes('/wp-json/')
@@ -22,7 +27,8 @@
         const cleanHome = settings.homeUrl.replace(/\/$/, '');
         const cleanPath = path.replace(/^\//, '').split('?')[0];
         const queryParams = path.includes('?') ? '&' + path.split('?')[1] : '';
-        return cleanHome + '/?rest_route=/' + cleanPath + queryParams;
+        const nonceParam = settings.nonce ? '&_wpnonce=' + settings.nonce : '';
+        return cleanHome + '/?rest_route=/' + cleanPath + queryParams + nonceParam;
       };
 
       // 🛡️ Pre-emptive Fallback if we already know REST is broken
@@ -79,7 +85,6 @@
   const ClientDashboard = () => {
     const [features, setFeatures] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [isRefreshing, setIsRefreshing] = useState(false);
     const [error, setError] = useState(null);
     const [activeStatus, setActiveStatus] = useState(() => {
       const saved = localStorage.getItem('vaptsecure_workbench_active_status');
@@ -91,20 +96,7 @@
       return saved ? saved : null;
     });
     const [saveStatus, setSaveStatus] = useState(null);
-    const [enforceStatusMap, setEnforceStatusMap] = useState({});
     const [verifFeature, setVerifFeature] = useState(null);
-
-    // Helper: show a per-feature inline enforce status, auto-dismiss after 2s
-    const setEnforceStatus = (featureKey, msg, type = 'success') => {
-      setEnforceStatusMap(prev => ({ ...prev, [featureKey]: { message: msg, type } }));
-      setTimeout(() => {
-        setEnforceStatusMap(prev => {
-          const next = { ...prev };
-          delete next[featureKey];
-          return next;
-        });
-      }, 2200);
-    };
 
     useEffect(() => {
       localStorage.setItem('vaptsecure_workbench_active_status', activeStatus);
@@ -125,8 +117,7 @@
     }, [saveStatus]);
 
     const fetchData = (refresh = false) => {
-      if (refresh) setIsRefreshing(true);
-      else setLoading(true);
+      setLoading(true);
 
       // Workbench always fetches all features (Superadmin-only, unscoped)
       const path = 'vaptsecure/v1/features';
@@ -136,12 +127,10 @@
           const uniqueFeatures = Array.from(new Map((data.features || []).map(item => [item.key, item])).values());
           setFeatures(uniqueFeatures);
           setLoading(false);
-          setIsRefreshing(false);
         })
         .catch(err => {
           setError(err.message || 'Failed to load features');
           setLoading(false);
-          setIsRefreshing(false);
         });
     };
 
@@ -344,63 +333,6 @@
                   boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
                 }
               }, f.status),
-              el('div', { style: { display: 'flex', alignItems: 'center', background: '#f8fafc', padding: '6px 12px', borderRadius: '8px', border: '1px solid #e2e8f0' } }, [
-                el('span', { style: { fontSize: '12px', fontWeight: 600, color: '#334155', marginRight: '12px', whiteSpace: 'nowrap' } }, __('Enforce Rule')),
-                (() => {
-                  const isHtaccess = schema.enforcement && schema.enforcement.driver === 'htaccess';
-                  // Default to TRUE if undefined/null (v3.6.23)
-                  const isEnforced = isHtaccess ? true : (f.is_enforced === undefined || f.is_enforced === null || f.is_enforced == 1);
-                  const toggle = el(ToggleControl, {
-                    checked: isEnforced,
-                    onChange: (val) => {
-                      // [v1.3.12] Inline per-feature status — no global toast
-                      const implData = f.implementation_data || {};
-                      const progressMsg = val
-                        ? __('Writing to configuration...', 'vaptsecure')
-                        : __('Removing from configuration...', 'vaptsecure');
-                      const successMsg = val
-                        ? __('✓ Code Injected Successfully', 'vaptsecure')
-                        : __('✓ Removed Successfully', 'vaptsecure');
-                      setEnforceStatus(f.key, progressMsg, 'info');
-                      updateFeature(f.key, { is_enforced: val, implementation_data: implData }, null, true)
-                        .then(() => setEnforceStatus(f.key, successMsg, 'success'));
-                    },
-                    __nextHasNoMarginBottom: true,
-                    style: { margin: 0 }
-                  });
-
-                  return isHtaccess
-                    ? el(Tooltip, { text: __('Enforcement is permanently active via .htaccess (Server Level)', 'vaptsecure') }, el('div', { style: { display: 'inline-block' } }, toggle))
-                    : toggle;
-                })()
-              ])
-              // Inline enforce status — matches 'Code Injected' pill styling exactly
-              , enforceStatusMap[f.key] && el('div', {
-                style: {
-                  marginTop: '6px',
-                  display: 'flex',
-                  justifyContent: 'flex-end',
-                }
-              }, el('span', {
-                style: {
-                  fontSize: '10px',
-                  fontWeight: '600',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  background: enforceStatusMap[f.key].type === 'success' ? '#ecfdf5' : '#f0f9ff',
-                  color: enforceStatusMap[f.key].type === 'success' ? '#059669' : '#0369a1',
-                  border: `1px solid ${enforceStatusMap[f.key].type === 'success' ? '#10b981' : '#0ea5e9'}`,
-                  boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                  transition: 'opacity 0.3s',
-                  whiteSpace: 'nowrap',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '4px'
-                }
-              }, [
-                el(Icon, { icon: enforceStatusMap[f.key].type === 'success' ? 'yes' : 'update', size: 12 }),
-                enforceStatusMap[f.key].message
-              ]))
             ])
           ])
         ]),
@@ -496,31 +428,7 @@
           el('h2', { style: { margin: 0, fontSize: '18px', fontWeight: 700, color: '#111827', display: 'flex', alignItems: 'baseline', gap: '8px' } }, [
             __('VAPT Implementation Dashboard'),
             el('span', { style: { fontSize: '11px', color: '#9ca3af', fontWeight: '400' } }, `v${settings.pluginVersion}`)
-          ]),
-          isSuper && el('span', {
-            style: {
-              marginLeft: '10px',
-              fontSize: '10px',
-              color: '#fff',
-              background: '#1e3a8a', // Dark Blue
-              padding: '4px 8px',
-              borderRadius: '5px',
-              fontWeight: '600',
-              textTransform: 'uppercase',
-              letterSpacing: '0.5px',
-              verticalAlign: 'middle',
-              boxShadow: '0 1px 2px rgba(0,0,0,0.1)'
-            }
-          }, 'SUPERADMIN'),
-          el(Button, {
-            icon: 'update',
-            isSmall: true,
-            isSecondary: true,
-            onClick: () => fetchData(true),
-            disabled: loading || isRefreshing,
-            isBusy: isRefreshing,
-            label: __('Refresh Data', 'vaptsecure')
-          })
+          ])
         ]),
         el('div', { style: { display: 'flex', gap: '5px', background: '#f3f4f6', padding: '4px', borderRadius: '8px' } },
           availableStatuses.map(s => el(Button, {
