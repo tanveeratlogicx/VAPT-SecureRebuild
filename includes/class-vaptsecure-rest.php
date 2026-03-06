@@ -226,7 +226,10 @@ class VAPTSECURE_REST
   {
     $is_super = is_vaptsecure_superadmin();
     if (!$is_super) {
-      error_log("VAPTSECURE_REST: check_permission FAILED for user " . get_current_user_id());
+      $uid = get_current_user_id();
+      $user = get_userdata($uid);
+      $login = $user ? $user->user_login : 'unknown';
+      error_log("VAPTSECURE_REST: check_permission FAILED for user ID $uid ($login). Superadmin status required.");
     }
     return $is_super;
   }
@@ -235,8 +238,15 @@ class VAPTSECURE_REST
   {
     $is_super = is_vaptsecure_superadmin();
     $can_manage = current_user_can('manage_options');
+    $uid = get_current_user_id();
+    $user = get_userdata($uid);
+    $login = $user ? $user->user_login : 'unknown';
+
+    // Debug logging
+    error_log("VAPTSECURE_REST: check_read_permission - User ID: $uid ($login), is_super: " . ($is_super ? 'true' : 'false') . ", can_manage: " . ($can_manage ? 'true' : 'false'));
+
     if (!$is_super && !$can_manage) {
-      error_log("VAPTSECURE_REST: check_read_permission FAILED for user " . get_current_user_id());
+      error_log("VAPTSECURE_REST: check_read_permission FAILED for user ID $uid ($login). 'manage_options' capability required.");
     }
     return $is_super || $can_manage;
   }

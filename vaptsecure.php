@@ -3,7 +3,7 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           2.2.5
+ * Version:           2.2.8
  * Author:            Tanzeel Malik
  * Author URI:        https://vapt.copilot.com
  * License:           GPL-2.0+
@@ -50,7 +50,7 @@ if (false) {
  * Define Paths & Constants
  */
 if (!defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '2.2.5');
+  define('VAPTSECURE_VERSION', '2.2.7');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
@@ -749,93 +749,112 @@ function vaptsecure_enqueue_admin_assets($hook)
       VAPTSECURE_VERSION,
       true
     );
+  }
 
-    // 🛡️ GLOBAL REST HOTPATCH (v3.8.16) - Inline for maximum priority
-    $home_url = esc_url_raw(home_url());
-    $inline_patch = "
-      (function() {
-        if (typeof wp === 'undefined' || !wp.apiFetch) return;
-        if (wp.apiFetch.__vaptsecure_patched) return;
+
+  // Common Settings Localization
+  $vapt_settings = array(
+    'root' => esc_url_raw(rest_url()),
+    'homeUrl' => esc_url_raw(home_url()),
+    'nonce' => wp_create_nonce('wp_rest'),
+    'isSuper' => $is_superadmin,
+    'pluginVersion' => VAPTSECURE_VERSION,
+    'pluginName' => 'VAPT Secure',
+    'currentDomain' => parse_url(home_url(), PHP_URL_HOST),
+  );
+
+  // 🛡️ GLOBAL REST HOTPATCH (v3.8.17) - Inline for maximum priority
+  $home_url = esc_url_raw(home_url());
+  $inline_patch = "
+    (function() {
+      if (typeof wp === 'undefined' || !wp.apiFetch) return;
+      if (wp.apiFetch.__vaptsecure_patched) return;
+      
+      let localBroken = localStorage.getItem('vaptsecure_rest_broken') === '1';
+      const originalApiFetch = wp.apiFetch;
+
+      const patchedApiFetch = (args) => {
+        // Get nonce from WordPress standard wpApiSettings or custom vaptSecureSettings
+        const wpNonce = (window.wpApiSettings && window.wpApiSettings.nonce) || '';
+        const vaptNonce = (window.vaptSecureSettings && window.vaptSecureSettings.nonce) || '';
+        const effectiveNonce = wpNonce || vaptNonce;
         
-        let localBroken = localStorage.getItem('vaptsecure_rest_broken') === '1';
-        const originalApiFetch = wp.apiFetch;
-
-        const patchedApiFetch = (args) => {
-          const settings = window.vaptSecureSettings || {};
-          const home = '{$home_url}';
-          
-          // 🛡️ AUTH PERI-FIX: Ensure Nonce is present for non-GET requests
-          if (settings.nonce && args.method && args.method !== 'GET') {
-            args.headers = Object.assign({}, args.headers || {}, { 'X-WP-Nonce': settings.nonce });
+        const home = '{$home_url}';
+        
+        // 🛡️ AUTH PERI-FIX: Ensure Nonce is present for non-GET requests
+        const method = (args.method || 'GET').toUpperCase();
+        if (effectiveNonce && method !== 'GET') {
+          if (!args.headers) args.headers = {};
+          // Handle both plain objects and Headers objects
+          if (typeof args.headers.set === 'function') {
+            if (!args.headers.has('X-WP-Nonce')) args.headers.set('X-WP-Nonce', effectiveNonce);
+          } else {
+            args.headers['X-WP-Nonce'] = effectiveNonce;
           }
-          
-          const getFallbackUrl = (pathOrUrl) => {
-            if (!pathOrUrl) return null;
-            const path = typeof pathOrUrl === 'string' && pathOrUrl.includes('/wp-json/') 
-              ? pathOrUrl.split('/wp-json/')[1] 
-              : pathOrUrl;
-            const cleanHome = home.replace(/\/$/, '');
-            const cleanPath = path.replace(/^\//, '').split('?')[0];
-            const queryParams = path.includes('?') ? '&' + path.split('?')[1] : '';
-            const nonceParam = settings.nonce ? '&_wpnonce=' + settings.nonce : '';
-            return cleanHome + '/?rest_route=/' + cleanPath + queryParams + nonceParam;
-          };
-
-          // 🛡️ INSTANT Pre-emptive Fallback if we already know REST is broken
-          if (localBroken && (args.path || args.url) && home) {
-            const fallbackUrl = getFallbackUrl(args.path || args.url);
-            if (fallbackUrl) {
-              const fallbackArgs = Object.assign({}, args, { url: fallbackUrl });
-              delete fallbackArgs.path;
-              return originalApiFetch(fallbackArgs);
-            }
-          }
-
-          return originalApiFetch(args).catch(err => {
-            const status = err.status || (err.data && err.data.status);
-            const isFallbackTrigger = status === 404 || status === 403 || err.code === 'rest_no_route' || err.code === 'invalid_json';
-
-            if (isFallbackTrigger && (args.path || args.url) && home) {
-              const fallbackUrl = getFallbackUrl(args.path || args.url);
-              if (!fallbackUrl) throw err;
-
-              // 🛡️ Switch to Silent Mode closure-wide and storage-wide
-              if (!localBroken) {
-                console.warn('VAPT Secure: Switching to Pre-emptive Mode (Silent) for REST API.');
-                localBroken = true;
-                localStorage.setItem('vaptsecure_rest_broken', '1');
-              }
-              
-              const fallbackArgs = Object.assign({}, args, { url: fallbackUrl });
-              delete fallbackArgs.path;
-              return originalApiFetch(fallbackArgs);
-            }
-            throw err;
-          });
+        }
+        
+        const getFallbackUrl = (pathOrUrl) => {
+          if (!pathOrUrl) return null;
+          const path = typeof pathOrUrl === 'string' && pathOrUrl.includes('/wp-json/')
+            ? pathOrUrl.split('/wp-json/')[1]
+            : pathOrUrl;
+          const cleanHome = home.replace(/\/$/, '');
+          const cleanPath = path.replace(/^\//, '').split('?')[0];
+          const queryParams = path.includes('?') ? '&' + path.split('?')[1] : '';
+          const nonceParam = effectiveNonce ? '&_wpnonce=' + effectiveNonce : '';
+          return cleanHome + '/?rest_route=/' + cleanPath + queryParams + nonceParam;
         };
 
-        Object.keys(originalApiFetch).forEach(key => { patchedApiFetch[key] = originalApiFetch[key]; });
-        patchedApiFetch.__vaptsecure_patched = true;
-        wp.apiFetch = patchedApiFetch;
-        console.log('VAPT Secure: Persistent Global REST Hotpatch Active (v3.8.16)');
-      })();
-    ";
-    wp_add_inline_script('wp-api-fetch', $inline_patch);
-    wp_localize_script('vapt-admin-js', 'vaptSecureSettings', array(
-      'root' => esc_url_raw(rest_url()),
-      'homeUrl' => esc_url_raw(home_url()),
-      'nonce' => wp_create_nonce('wp_rest'),
-      'isSuper' => $is_superadmin,
-      'pluginVersion' => VAPTSECURE_VERSION,
-      'pluginName' => 'VAPT Secure'
-    ));
+        // 🛡️ INSTANT Pre-emptive Fallback if we already know REST is broken
+        if (localBroken && (args.path || args.url) && home) {
+          const fallbackUrl = getFallbackUrl(args.path || args.url);
+          if (fallbackUrl) {
+            const fallbackArgs = Object.assign({}, args, { url: fallbackUrl });
+            delete fallbackArgs.path;
+            return originalApiFetch(fallbackArgs);
+          }
+        }
+
+        return originalApiFetch(args).catch(err => {
+          const status = err.status || (err.data && err.data.status);
+          const isFallbackTrigger = status === 404 || status === 403 || err.code === 'rest_no_route' || err.code === 'invalid_json';
+
+          if (isFallbackTrigger && (args.path || args.url) && home) {
+            const fallbackUrl = getFallbackUrl(args.path || args.url);
+            if (!fallbackUrl) throw err;
+
+            // 🛡️ Switch to Silent Mode closure-wide and storage-wide
+            if (!localBroken) {
+              console.warn('VAPT Secure: Switching to Pre-emptive Mode (Silent) for REST API.');
+              localBroken = true;
+              localStorage.setItem('vaptsecure_rest_broken', '1');
+            }
+            
+            const fallbackArgs = Object.assign({}, args, { url: fallbackUrl });
+            delete fallbackArgs.path;
+            return originalApiFetch(fallbackArgs);
+          }
+          throw err;
+        });
+      };
+
+      Object.keys(originalApiFetch).forEach(key => { patchedApiFetch[key] = originalApiFetch[key]; });
+      patchedApiFetch.__vaptsecure_patched = true;
+      wp.apiFetch = patchedApiFetch;
+      console.log('VAPT Secure: Persistent Global REST Hotpatch Active (v3.8.17)');
+    })();
+  ";
+  wp_add_inline_script('wp-api-fetch', $inline_patch);
+
+  if ($screen->id === 'toplevel_page_vaptsecure-domain-admin' || $screen->id === 'vaptsecure_page_vaptsecure-domain-admin' || strpos($screen->id, 'vaptsecure-domain-admin') !== false) {
+    wp_localize_script('vapt-admin-js', 'vaptSecureSettings', $vapt_settings);
   }
   // 2. Shared: Generated Interface UI Component
   if ($screen->id === 'toplevel_page_vaptsecure' || strpos($screen->id, 'vaptsecure-workbench') !== false) {
     wp_enqueue_script(
       'vapt-generated-interface-ui',
       plugin_dir_url(__FILE__) . 'assets/js/modules/generated-interface.js',
-      array('wp-element', 'wp-components'),
+      array('wp-element', 'wp-components', 'wp-i18n'),
       VAPTSECURE_VERSION,
       true
     );
@@ -846,19 +865,11 @@ function vaptsecure_enqueue_admin_assets($hook)
     wp_enqueue_script(
       'vapt-client-js',
       plugin_dir_url(__FILE__) . 'assets/js/client.js',
-      array('wp-element', 'wp-components', 'wp-i18n', 'vapt-generated-interface-ui'),
+      array('wp-element', 'wp-components', 'wp-api-fetch', 'wp-i18n', 'vapt-generated-interface-ui'),
       VAPTSECURE_VERSION,
       true
     );
-    wp_localize_script('vapt-client-js', 'vaptSecureSettings', array(
-      'root'          => esc_url_raw(rest_url()),
-      'homeUrl'       => esc_url_raw(home_url()),
-      'nonce'         => wp_create_nonce('wp_rest'),
-      'isSuper'       => $is_superadmin,
-      'currentDomain' => parse_url(home_url(), PHP_URL_HOST),
-      'pluginVersion' => VAPTSECURE_VERSION,
-      'pluginName'    => 'VAPT Secure'
-    ));
+    wp_localize_script('vapt-client-js', 'vaptSecureSettings', $vapt_settings);
   }
 
   // 2b. Superadmin Workbench (workbench.js) - "VAPT Secure Workbench" page (All features, unscoped)
@@ -866,19 +877,11 @@ function vaptsecure_enqueue_admin_assets($hook)
     wp_enqueue_script(
       'vapt-workbench-js',
       plugin_dir_url(__FILE__) . 'assets/js/workbench.js',
-      array('wp-element', 'wp-components', 'wp-i18n', 'vapt-generated-interface-ui'),
+      array('wp-element', 'wp-components', 'wp-api-fetch', 'wp-i18n', 'vapt-generated-interface-ui'),
       VAPTSECURE_VERSION,
       true
     );
-    wp_localize_script('vapt-workbench-js', 'vaptSecureSettings', array(
-      'root'          => esc_url_raw(rest_url()),
-      'homeUrl'       => esc_url_raw(home_url()),
-      'nonce'         => wp_create_nonce('wp_rest'),
-      'isSuper'       => $is_superadmin,
-      'currentDomain' => parse_url(home_url(), PHP_URL_HOST),
-      'pluginVersion' => VAPTSECURE_VERSION,
-      'pluginName'    => 'VAPT Secure'
-    ));
+    wp_localize_script('vapt-workbench-js', 'vaptSecureSettings', $vapt_settings);
   }
 }
 ?>
