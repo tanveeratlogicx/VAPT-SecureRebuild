@@ -3,13 +3,14 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           2.2.1
+ * Version:           2.2.2
  * Author:            Tanzeel Malik
  * Author URI:        https://vapt.copilot.com
+ * License:           GPL-2.0+
+ * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain:       vaptsecure
  * Domain Path:       /languages
  *
- * @package vaptsecure
  */
 
 if (!defined('ABSPATH')) {
@@ -17,16 +18,15 @@ if (!defined('ABSPATH')) {
 }
 
 // Ensure the Composer autoloader is included if it exists.
-$autoloader = dirname(__FILE__) . '/vendor/autoload.php';
-if (file_exists($autoloader)) {
-  require_once $autoloader;
+if (file_exists(dirname(__FILE__) . '/vendor/autoload.php')) {
+  require_once dirname(__FILE__) . '/vendor/autoload.php';
 }
 
 /**
- * The current version of the plugin.
+ * Define Paths & Constants
  */
 if (!defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '2.2.1');
+  define('VAPTSECURE_VERSION', '2.2.2');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
