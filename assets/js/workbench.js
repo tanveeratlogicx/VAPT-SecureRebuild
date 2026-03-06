@@ -43,8 +43,8 @@
 
       return originalApiFetch(args).catch(err => {
         const status = err.status || (err.data && err.data.status);
-        // 🛡️ Trigger fallback on 404 OR invalid_json (common when server returns HTML for 404)
-        const isFallbackTrigger = status === 404 || err.code === 'rest_no_route' || err.code === 'invalid_json';
+        // 🛡️ Trigger fallback on 403/404 OR invalid_json (common when server returns HTML for error)
+        const isFallbackTrigger = status === 404 || status === 403 || err.code === 'rest_no_route' || err.code === 'invalid_json';
 
         if (isFallbackTrigger && (args.path || args.url) && settings.homeUrl) {
           const fallbackUrl = getFallbackUrl(args.path || args.url);

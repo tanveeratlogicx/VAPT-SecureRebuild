@@ -23,6 +23,30 @@ if (file_exists(dirname(__FILE__) . '/vendor/autoload.php')) {
 }
 
 /**
+ * 🛠️ Linter Stubs (Satisfies IDEs without WP symbols)
+ */
+if (false) {
+  function home_url($path = '', $scheme = null)
+  {
+    return '';
+  }
+  function remove_submenu_page($menu_slug, $submenu_slug) {}
+  function wp_add_inline_script($handle, $data, $position = 'after') {}
+  function admin_url($path = '', $scheme = 'admin')
+  {
+    return '';
+  }
+  function rest_url($path = '', $scheme = 'rest')
+  {
+    return '';
+  }
+  function wp_create_nonce($action = -1)
+  {
+    return '';
+  }
+}
+
+/**
  * Define Paths & Constants
  */
 if (!defined('VAPTSECURE_VERSION')) {
@@ -769,7 +793,7 @@ function vaptsecure_enqueue_admin_assets($hook)
 
           return originalApiFetch(args).catch(err => {
             const status = err.status || (err.data && err.data.status);
-            const isFallbackTrigger = status === 404 || err.code === 'rest_no_route' || err.code === 'invalid_json';
+            const isFallbackTrigger = status === 404 || status === 403 || err.code === 'rest_no_route' || err.code === 'invalid_json';
 
             if (isFallbackTrigger && (args.path || args.url) && home) {
               const fallbackUrl = getFallbackUrl(args.path || args.url);
