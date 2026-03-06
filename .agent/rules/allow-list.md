@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # Terminal Command Allow List
 
 This file contains commands that are explicitly safe to auto-run.
@@ -6,6 +10,7 @@ Even if a command is not here, it will be auto-run unless it matches the Deny Li
 
 - `git status`
 - `git status --ignored`
+- `git log`
 - `git status --porcelain=v1`
 - `ls`
 - `dir`
