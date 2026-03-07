@@ -1481,10 +1481,6 @@ class VAPTSECURE_REST
     require_once(ABSPATH . 'wp-admin/includes/media.php');
     require_once(ABSPATH . 'wp-admin/includes/image.php');
 
-    require_once(ABSPATH . 'wp-admin/includes/file.php');
-    require_once(ABSPATH . 'wp-admin/includes/media.php');
-    require_once(ABSPATH . 'wp-admin/includes/image.php');
-
     $upload_dir_filter = function ($uploads) {
       $subdir = '/vapt-wireframes';
       $uploads['subdir'] = $subdir;
