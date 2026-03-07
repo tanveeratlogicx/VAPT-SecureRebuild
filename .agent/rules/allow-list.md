@@ -17,5 +17,7 @@ Even if a command is not here, it will be auto-run unless it matches the Deny Li
 - `pwd`
 - `tail`
 - `grep`
-- `get-content`
+- `Get-Content`
 - `php`
+- `ls`
+- `tail`

@@ -306,9 +306,11 @@ class VAPTSECURE_Htaccess_Driver
         $log .= "Write SUCCESS: " . strlen($new_content) . " bytes written to $htaccess_path. Backup created.\n";
         delete_transient('vaptsecure_active_enforcements');
       } else {
-        $log .= "Write FAILURE: Could not write to $htaccess_path. Check file permissions.\n";
-        error_log("VAPT: Failed to write .htaccess to $htaccess_path.");
-        set_transient('vaptsecure_htaccess_write_error_' . time(), "Failed to update .htaccess file. check perms.", 300);
+        $error = error_get_last();
+        $error_msg = isset($error['message']) ? $error['message'] : 'Unknown filesystem error';
+        $log .= "Write FAILURE: Could not write to $htaccess_path. Error: $error_msg. Check file permissions.\n";
+        error_log("VAPT: Failed to write .htaccess to $htaccess_path. Error: $error_msg");
+        set_transient('vaptsecure_htaccess_write_error_' . time(), "Failed to update .htaccess file: $error_msg", 300);
         return false;
       }
     } else {

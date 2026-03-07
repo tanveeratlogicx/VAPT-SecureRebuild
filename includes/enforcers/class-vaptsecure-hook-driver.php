@@ -961,12 +961,17 @@ class VAPTSECURE_Hook_Driver
                     if (
                         preg_match('#/wp/v2/users/me($|\?|/)#', $current_route)
                     ) {
-                        if (!is_user_logged_in()) {
-                            return new WP_Error(
-                                "rest_forbidden",
-                                "Authentication required.",
-                                ["status" => 401],
-                            );
+                        // if (!is_user_logged_in()) {
+                        //     return new WP_Error(
+                        //         "rest_forbidden",
+                        //         "Authentication required.",
+                        //         ["status" => 401],
+                        //     );
+                        // }
+                        // Check if user is authenticated via REST API
+                        $current_user_id = get_current_user_id();
+                        if (!$current_user_id || $current_user_id === 0) {
+                            return new WP_Error("rest_forbidden", "Authentication required.", ["status" => 401]);
                         }
                     }
                 }

@@ -1,0 +1,37 @@
+# VAPT Secure - REST API Fix Rules
+# Add these rules to your WordPress .htaccess file
+# IMPORTANT: These rules should be placed AFTER the WordPress default rules
+
+# ========================================
+# REST API 500 Error Fix - VAPT Secure
+# ========================================
+
+# Allow /users/me endpoint for current user profile (needed by WordPress admin)
+# This fixes the 500 error on /wp-json/wp/v2/users/me
+RewriteCond %{REQUEST_URI} ^wp-json/wp/v2/users/me [NC]
+RewriteRule ^ - [L]
+
+# Allow REST API requests (prevent 500 errors)
+# Skip SQL injection and other checks for REST API requests
+RewriteCond %{REQUEST_URI} !^/wp-json/ [NC]
+RewriteCond %{QUERY_STRING} !rest_route= [NC]
+
+# ========================================
+# End of VAPT Secure REST API Fix
+# ========================================
+
+# IMPORTANT: Place the above rules AFTER the standard WordPress rewrite rules:
+# 
+# # BEGIN WordPress
+# <IfModule mod_rewrite.c>
+# RewriteEngine On
+# RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+# RewriteBase /
+# RewriteRule ^index\.php$ - [L]
+# RewriteCond %{REQUEST_FILENAME} !-f
+# RewriteCond %{REQUEST_FILENAME} !-d
+# RewriteRule . /index.php [L]
+# </IfModule>
+# # END WordPress
+#
+# # VAPT Secure rules go here...

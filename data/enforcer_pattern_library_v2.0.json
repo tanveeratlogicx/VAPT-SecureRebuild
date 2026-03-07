@@ -151,8 +151,8 @@
           "mod_rewrite"
         ],
         "allowoverride": "FileInfo",
-        "code": "<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteRule ^wp-json/wp/v2/users$ - [F,L]\n    RewriteRule ^wp-json/wp/v2/users/ - [F,L]\n</IfModule>",
-        "wrapped_code": "# BEGIN VAPT RISK-003\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteRule ^wp-json/wp/v2/users$ - [F,L]\n    RewriteRule ^wp-json/wp/v2/users/ - [F,L]\n</IfModule>\n# END VAPT RISK-003",
+        "code": "<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteCond %{REQUEST_URI} !/wp-json/wp/v2/users/me [NC]\n    RewriteRule ^wp-json/wp/v2/users - [F,L]\n</IfModule>",
+        "wrapped_code": "# BEGIN VAPT RISK-003\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteCond %{REQUEST_URI} !/wp-json/wp/v2/users/me [NC]\n    RewriteRule ^wp-json/wp/v2/users - [F,L]\n</IfModule>\n# END VAPT RISK-003",
         "begin_marker": "# BEGIN VAPT RISK-003",
         "end_marker": "# END VAPT RISK-003",
         "note": "Must be BEFORE # BEGIN WordPress. WP [L] catch-all makes anything after # END WordPress a dead zone. Covers /users and /users/ variants.",
@@ -164,7 +164,7 @@
         "driver": {
           "write_mode": "insert_at_anchor",
           "target_file": "{ABSPATH}.htaccess",
-          "write_block": "# BEGIN VAPT RISK-003\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteRule ^wp-json/wp/v2/users$ - [F,L]\n    RewriteRule ^wp-json/wp/v2/users/ - [F,L]\n</IfModule>\n# END VAPT RISK-003",
+          "write_block": "# BEGIN VAPT RISK-003\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteCond %{REQUEST_URI} !/wp-json/wp/v2/users/me [NC]\n    RewriteRule ^wp-json/wp/v2/users - [F,L]\n</IfModule>\n# END VAPT RISK-003",
           "anchor_string": "# BEGIN WordPress",
           "anchor_position": "before",
           "fallback": "prepend",
