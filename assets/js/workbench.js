@@ -9,66 +9,6 @@
   const settings = window.vaptSecureSettings || window.vaptSecureSettings || {};
   const isSuper = settings.isSuper || false;
 
-  // 🛡️ GLOBAL REST HOTPATCH (v3.8.16)
-  if (wp.apiFetch && !wp.apiFetch.__vaptsecure_patched) {
-    let localBroken = localStorage.getItem('vaptsecure_rest_broken') === '1';
-    const originalApiFetch = wp.apiFetch;
-    const patchedApiFetch = (args) => {
-      // 🛡️ AUTH PERI-FIX: Ensure Nonce is present for non-GET requests
-      if (settings.nonce && args.method && args.method !== 'GET') {
-        args.headers = Object.assign({}, args.headers || {}, { 'X-WP-Nonce': settings.nonce });
-      }
-
-      const getFallbackUrl = (pathOrUrl) => {
-        if (!pathOrUrl) return null;
-        const path = typeof pathOrUrl === 'string' && pathOrUrl.includes('/wp-json/')
-          ? pathOrUrl.split('/wp-json/')[1]
-          : pathOrUrl;
-        const cleanHome = settings.homeUrl.replace(/\/$/, '');
-        const cleanPath = path.replace(/^\//, '').split('?')[0];
-        const queryParams = path.includes('?') ? '&' + path.split('?')[1] : '';
-        const nonceParam = settings.nonce ? '&_wpnonce=' + settings.nonce : '';
-        return cleanHome + '/?rest_route=/' + cleanPath + queryParams + nonceParam;
-      };
-
-      // 🛡️ Pre-emptive Fallback if we already know REST is broken
-      if (localBroken && (args.path || args.url) && settings.homeUrl) {
-        const fallbackUrl = getFallbackUrl(args.path || args.url);
-        if (fallbackUrl) {
-          const fallbackArgs = Object.assign({}, args, { url: fallbackUrl });
-          delete fallbackArgs.path;
-          return originalApiFetch(fallbackArgs);
-        }
-      }
-
-      return originalApiFetch(args).catch(err => {
-        const status = err.status || (err.data && err.data.status);
-        // 🛡️ Trigger fallback on 403/404 OR invalid_json (common when server returns HTML for error)
-        const isFallbackTrigger = status === 404 || status === 403 || err.code === 'rest_no_route' || err.code === 'invalid_json';
-
-        if (isFallbackTrigger && (args.path || args.url) && settings.homeUrl) {
-          const fallbackUrl = getFallbackUrl(args.path || args.url);
-          if (!fallbackUrl) throw err;
-
-          if (!localBroken) {
-            console.warn('VAPT Secure: Switching to Pre-emptive Mode (Silent) for REST API.');
-            localBroken = true;
-            localStorage.setItem('vaptsecure_rest_broken', '1');
-          }
-
-          const fallbackArgs = Object.assign({}, args, { url: fallbackUrl });
-          delete fallbackArgs.path;
-          return originalApiFetch(fallbackArgs);
-        }
-        throw err;
-      });
-    };
-
-    Object.keys(originalApiFetch).forEach(key => { patchedApiFetch[key] = originalApiFetch[key]; });
-    patchedApiFetch.__vaptsecure_patched = true;
-    wp.apiFetch = patchedApiFetch;
-  }
-
   const apiFetch = wp.apiFetch;
   const { __, sprintf } = wp.i18n || {};
 

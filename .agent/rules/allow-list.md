@@ -10,10 +10,11 @@ Even if a command is not here, it will be auto-run unless it matches the Deny Li
 
 - `git status`
 - `git status --ignored`
-- `git log`
 - `git status --porcelain=v1`
+- `git log`
 - `ls`
 - `dir`
 - `pwd`
 - `tail`
 - `grep`
+- `get-content`
