@@ -1088,6 +1088,12 @@
     // Derived flags for rendering logic
     const isRateLimit = ['RISK-033', 'RISK-039'].includes(feature.key || feature.id) || !!feature.is_rate_limit;
 
+    const handleChange = (key, val) => {
+      if (typeof onUpdate === 'function') {
+        onUpdate(key, val);
+      }
+    };
+
     const renderControl = (control, index) => {
       const { type, label, key, help, options, rows, action } = control;
       const value = currentData[key] !== undefined ? currentData[key] : (control.default || '');
