@@ -156,7 +156,15 @@
       }
 
       if (toBool(featureData?.feat_enabled) === false) {
+        if ([403, 404, 429].includes(response.status)) {
+          return { success: true, message: `Status: Protection Disabled (Intentional). Resource natively blocked/missing (HTTP ${response.status}).`, raw: `URL: ${url} | Status: ${response.status}\n\n${headerStr.trim()}` };
+        }
         return { success: true, message: `Status: Protection Disabled (Intentional). No enforcement detected.`, raw: `URL: ${url} | Status: ${response.status} | Expected: No VAPT Headers\n\n${headerStr.trim()}` };
+      }
+
+      // If it's a natively blocked file like 404/403 but no VAPT headers, mark as secure but not by us
+      if ([403, 404, 429].includes(response.status)) {
+        return { success: true, message: `Security headers missing, but resource provides native protection (HTTP ${response.status}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
       }
 
       return { success: false, message: `Security headers present, but NOT by this plugin. VAPT enforcement header missing.`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
