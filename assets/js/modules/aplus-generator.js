@@ -109,16 +109,66 @@
         ],
         ...(includeProtocol ? {
           manual_protocol: {
-            steps: Array.isArray(feature.verification_steps) ? feature.verification_steps : (feature.verification_steps ? [feature.verification_steps] : ["Manual verification steps not provided."])
+            steps: Array.isArray(feature.verification_steps) && feature.verification_steps.length > 0
+              ? feature.verification_steps
+              : (feature.verification_steps
+                ? [feature.verification_steps]
+                : [
+                  "To manually verify this protection:",
+                  "1. Ensure the 'Enable Protection' toggle is active and deployed.",
+                  "2. Follow the standard automated HTTP probe tests beneath the toggle.",
+                  "3. Validate the protection: " + (feature.summary || feature.description || "Monitor server headers for the expected block."),
+                  "4. If automated tests report a failure, check environment compatibility with the active enforcer."
+                ]
+              )
           }
         } : {}),
         ...(includeNotes ? {
-          operational_notes: feature.operational_notes || "Specific operational notes are currently unavailable."
+          operational_notes: feature.operational_notes || (() => {
+            const summaryText = feature.summary || feature.description || "This feature applies security enhancements.";
+            const platformTargetList = [];
+
+            if (feature.platform_implementations) {
+              for (const [key, details] of Object.entries(feature.platform_implementations)) {
+                if (details.target_file) {
+                  platformTargetList.push(`${key} (targets ${details.target_file})`);
+                } else if (details.lib_key) {
+                  platformTargetList.push(`${key} (via ${details.lib_key})`);
+                } else {
+                  platformTargetList.push(key);
+                }
+              }
+            }
+
+            const targetedSystems = platformTargetList.length > 0
+              ? `It modifies the following systems: ${platformTargetList.join(', ')}.`
+              : "It leverages dynamic capabilities based on your runtime environment.";
+
+            return `${summaryText} \n\nImplementation Details: ${targetedSystems}`;
+          })()
         } : {}),
         controls: [
-          { type: 'header', label: 'Implementation Control' },
-          { type: 'toggle', label: 'Enable Protection', key: 'feat_enabled', default: true },
-          { type: 'header', label: 'Automated Verification' },
+          { type: 'header', id: `vapt-header-impl-${riskId}`, label: 'Implementation Control' },
+          { type: 'toggle', id: `vapt-toggle-enable-${riskId}`, label: 'Enable Protection', key: 'feat_enabled', default: true },
+          {
+            type: 'html',
+            id: `vapt-description-summary-${riskId}`,
+            html: (() => {
+              const baseDesc = feature.summary || feature.description || `protection against ${title} based on your primary environment configuration`;
+              const cleanedDesc = baseDesc.replace(/\.$/, '') + '.'; // Ensure it ends with exactly one period
+              return `
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                  <div style="display: flex; alignItems: center; gap: 8px; color: #0ea5e9; font-weight: 700; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em;">
+                    <span style="font-size: 14px;">🛡️</span> Security Insights
+                  </div>
+                  <div style="color: #475569; margin-top: 4px;">
+                    <strong>Protection Applied:</strong> Activating this control mitigates the following security risk: <em>"${cleanedDesc}"</em>. This ensures that the system is properly hardened and enforces verified security protocols.
+                  </div>
+                </div>
+              `;
+            })()
+          },
+          { type: 'header', id: `vapt-header-verify-${riskId}`, label: 'Automated Verification' },
           ...this.suggestVerificationTests(feature, riskId)
         ],
         client_deployment: {
@@ -161,6 +211,7 @@
       // 1. Standard Header Check (Global for A+)
       tests.push({
         type: 'test_action',
+        id: `vapt-test-headers-${riskId}`,
         label: 'A+ Header Verification',
         key: 'verify_aplus_headers',
         test_logic: 'check_headers',
@@ -171,6 +222,7 @@
       if (featureKey.includes('user-enumeration') || featureKey.includes('users')) {
         tests.push({
           type: 'test_action',
+          id: `vapt-test-rest-${riskId}`,
           label: 'REST API Protection Check',
           key: 'verify_rest_lockdown',
           test_logic: 'universal_probe',
@@ -183,6 +235,7 @@
       } else if (featureKey.includes('xmlrpc')) {
         tests.push({
           type: 'test_action',
+          id: `vapt-test-xmlrpc-${riskId}`,
           label: 'XML-RPC Lockdown Check',
           key: 'verify_xmlrpc_block',
           test_logic: 'block_xmlrpc',
@@ -191,6 +244,7 @@
       } else if (featureKey.includes('directory') || featureKey.includes('indexing')) {
         tests.push({
           type: 'test_action',
+          id: `vapt-test-dir-${riskId}`,
           label: 'Directory Indexing Check',
           key: 'verify_dir_block',
           test_logic: 'disable_directory_browsing',
@@ -200,11 +254,12 @@
         // Generic active probe
         tests.push({
           type: 'test_action',
+          id: `vapt-test-active-${riskId}`,
           label: 'Active Protection Probe',
           key: 'verify_active_protection',
           test_logic: 'universal_probe',
           test_config: {
-            path: '/',
+            path: '/index.php',
             params: { vapt_test: 'active' },
             expected_headers: { 'x-vapt-enforced': 'htaccess|nginx|php-headers' }
           },
@@ -215,6 +270,7 @@
       // 3. Site Integrity Check
       tests.push({
         type: 'test_action',
+        id: `vapt-test-integrity-${riskId}`,
         label: 'Site Integrity Check',
         key: 'verify_integrity',
         test_logic: 'default',

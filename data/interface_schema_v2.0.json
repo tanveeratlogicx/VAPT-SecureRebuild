@@ -107,7 +107,7 @@
         "owasp_top_10_2025": "A06:2025 - Insecure Design",
         "owasp_top_10_2021_deprecated": "A04:2021 - Insecure Design"
       },
-      "summary": "WordPress cron system enabled via wp-cron.php allows resource exhaustion through repeated cron spam requests, leading to server overload.",
+      "summary": "The WordPress cron system (wp-cron.php) is susceptible to resource exhaustion attacks where repeated automated requests can overload the server and impact site availability.",
       "ui_layout": {
         "card_id": "vapt-card-risk001",
         "section": "Configuration",
@@ -213,7 +213,7 @@
         "owasp_top_10_2025": "A02:2025 - Security Misconfiguration",
         "owasp_top_10_2021_deprecated": "A05:2021 - Security Misconfiguration"
       },
-      "summary": "XML-RPC enabled allows distributed pingback amplification attacks, enabling DDoS via pingback.ping method.",
+      "summary": "The XML-RPC interface allows distributed pingback amplification attacks, enabling malicious actors to use your site as a proxy for launching DDoS attacks against other targets.",
       "ui_layout": {
         "card_id": "vapt-card-risk002",
         "section": "Information Disclosure",

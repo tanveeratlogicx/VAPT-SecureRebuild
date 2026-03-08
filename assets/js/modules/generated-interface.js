@@ -62,10 +62,20 @@
     const normalizedPath = sub.startsWith('/') ? sub : '/' + sub;
     let result = base + (normalizedPath === '/' ? '' : normalizedPath);
 
-    // 🛡️ Trailing Slash Resilience (v3.3.53): Ensure base URLs ALWAYS end in / to prevent fetch failure
-    if (!result.includes('/', 8)) result += '/';
+    // 🛡️ Trailing Slash Resilience (v3.3.53) - File-Aware Patch (v2.4.3)
+    // Only append if result doesn't look like a file (e.g., ends in .php or .html)
+    const isFile = /\.[a-z0-9]+$/i.test(result);
+    if (!result.includes('/', 8) && !isFile) result += '/';
 
     return result;
+  };
+
+  /**
+   * Helper: Consistent Boolean Type Casting (v3.14.2)
+   */
+  const toBool = (val) => {
+    if (val === true || val === 1 || val === '1' || val === 'true' || val === 'on') return true;
+    return false;
   };
 
   /**
@@ -129,18 +139,24 @@
         if (featureKey && enforcedFeature) {
           const activeFeatures = enforcedFeature.split(',').map(f => f.trim());
           if (activeFeatures.includes(featureKey)) {
+            if (toBool(featureData?.feat_enabled) === false) {
+              return { success: false, message: `Warning: Feature is DISABLED in UI but still being ENFORCED by server policy.`, raw: `URL: ${url} | Active Features: ${enforcedFeature}\n\n${headerStr.trim()}` };
+            }
             return { success: true, message: `Plugin is actively enforcing headers (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
           } else {
             // Case: Global headers exist but this feature isn't in the active list (intentional non-enforcement)
-            const isEnforcedInUI = featureData?.is_enforced != 0;
-            if (!isEnforcedInUI) {
-              return { success: false, message: `Feature is NOT enforced. Security headers are from other active features.`, raw: `URL: ${url} | Status: ${response.status} | Active Features: ${enforcedFeature}\n\n${headerStr.trim()}` };
+            if (toBool(featureData?.feat_enabled) === false) {
+              return { success: true, message: `Status: Protection Disabled (Intentional). No enforcement headers for this feature.`, raw: `URL: ${url} | Active Features: ${enforcedFeature}\n\n${headerStr.trim()}` };
             }
             return { success: false, message: `Discrepancy: Global headers found, but this specific feature ('${featureKey}') is NOT matching enforcement policy.`, raw: `URL: ${url} | Status: ${response.status} | Active Features: ${enforcedFeature}\n\n${headerStr.trim()}` };
           }
         }
         // If no feature list is provided, we can only verify global enforcement
         return { success: true, message: `Global security headers detected (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
+      }
+
+      if (toBool(featureData?.feat_enabled) === false) {
+        return { success: true, message: `Status: Protection Disabled (Intentional). No enforcement detected.`, raw: `URL: ${url} | Status: ${response.status} | Expected: No VAPT Headers\n\n${headerStr.trim()}` };
       }
 
       return { success: false, message: `Security headers present, but NOT by this plugin. VAPT enforcement header missing.`, raw: `URL: ${url} | Status: ${response.status} | Expected: A+ Headers\n\n${headerStr.trim()}` };
@@ -247,8 +263,18 @@
           details: debugMsg
         };
 
+        const isEnabled = toBool(featureData?.feat_enabled);
+
         if (blocked > 0 && hasVaptHeader) {
           window.dispatchEvent(new CustomEvent('vapt-refresh-stats', { detail: { featureKey } }));
+          if (!isEnabled) {
+            return {
+              success: false,
+              message: `Warning: Feature is DISABLED in UI but Rate Limiter is still BLOCKED traffic.`,
+              meta: resultMeta,
+              raw: `URL: ${resolveUrl('/', control.config?.url)} | Status: 429 | Expected: 200 (Disabled)`
+            };
+          }
           return {
             success: true,
             message: `Rate limiter is ACTIVE. Security measures are working correctly.`,
@@ -259,6 +285,14 @@
 
         if (successCount > 0 || lastCount > 0) {
           window.dispatchEvent(new CustomEvent('vapt-refresh-stats', { detail: { featureKey } }));
+          if (!isEnabled && blocked === 0) {
+            return {
+              success: true,
+              message: `Status: Protection Disabled (Intentional). Traffic was not restricted.`,
+              meta: resultMeta,
+              raw: `URL: ${resolveUrl('/', control.config?.url)} | Status: 200 | Expected: 200`
+            };
+          }
         }
 
         if (errorCount > 0) {
@@ -271,10 +305,10 @@
         }
 
         return {
-          success: false,
-          message: `Rate Limiter is NOT active. Traffic was not restricted.`,
+          success: isEnabled ? false : true,
+          message: isEnabled ? `Rate Limiter is NOT active. Traffic was not restricted.` : `Status: Protection Disabled (Intentional). Traffic was not restricted.`,
           meta: resultMeta,
-          raw: `URL: ${resolveUrl('/', control.config?.url)} | Status: 200 | Expected: 429`
+          raw: `URL: ${resolveUrl('/', control.config?.url)} | Status: 200 | Expected: ${isEnabled ? '429' : '200'}`
         };
       } catch (err) {
         return {
@@ -293,20 +327,34 @@
       const vaptEnforced = response.headers.get('x-vapt-enforced');
       const enforcedFeature = response.headers.get('x-vapt-feature');
 
+      const isEnabled = toBool(featureData?.feat_enabled);
+
       if (vaptEnforced === 'php-xmlrpc') {
         if (featureKey && enforcedFeature && enforcedFeature !== featureKey) {
-          return { success: false, message: `Inconclusive: XML-RPC is blocked by another VAPT feature ('${enforcedFeature}'). You must disable it there to verify this control independently.`, raw: `URL: ${url} | Status: ${resp.status} | Expected: 403` };
+          return { success: false, message: `Inconclusive: XML-RPC is blocked by another VAPT feature ('${enforcedFeature}'). You must disable it there to verify this control independently.`, raw: `URL: ${url} | Status: ${response.status} | Expected: 403` };
         }
-        return { success: true, message: `Plugin is actively blocking XML-RPC (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${resp.status} | Expected: 403` };
+        if (!isEnabled) {
+          return { success: false, message: `Warning: Feature is DISABLED in UI but still being ENFORCED (php-xmlrpc).`, raw: `URL: ${url} | Status: ${response.status} | Expected: 200 (Disabled)` };
+        }
+        return { success: true, message: `Plugin is actively blocking XML-RPC (${vaptEnforced}).`, raw: `URL: ${url} | Status: ${response.status} | Expected: 403` };
       }
 
-      const isVulnerable = resp.status === 200;
+      const isVulnerable = response.status === 200;
+
+      if (!isEnabled) {
+        return {
+          success: isVulnerable,
+          message: isVulnerable ? `Status: Protection Disabled (Intentional). XML-RPC responded.` : `XML-RPC is blocked (HTTP ${response.status}), but NOT by this plugin.`,
+          raw: `URL: ${url} | Status: ${response.status} | Expected: 200`
+        };
+      }
+
       return {
         success: false,
         message: isVulnerable
           ? `SECURITY FAILURE: XML-RPC is OPEN and VULNERABLE (HTTP 200). Plugin enforcement is not working.`
-          : `XML-RPC is blocked (HTTP ${resp.status}), but NOT by this plugin. VAPT enforcement header missing.`,
-        raw: `URL: ${url} | Status: ${resp.status} | Expected: 403`
+          : `XML-RPC is blocked (HTTP ${response.status}), but NOT by this plugin. VAPT enforcement header missing.`,
+        raw: `URL: ${url} | Status: ${response.status} | Expected: 403`
       };
     },
 
@@ -319,11 +367,20 @@
       const vaptEnforced = resp.headers.get('x-vapt-enforced');
       const enforcedFeature = resp.headers.get('x-vapt-feature');
 
+      const isEnabled = toBool(featureData?.feat_enabled);
+
       if (vaptEnforced === 'php-dir') {
         if (featureKey && enforcedFeature && enforcedFeature !== featureKey) {
           return { success: false, message: `Inconclusive: Directory browsing blocked by '${enforcedFeature}'.`, raw: `URL: ${target} | Status: ${resp.status}\n\n${snippet}` };
         }
+        if (!isEnabled) {
+          return { success: false, message: `Warning: Feature is DISABLED in UI but still being ENFORCED (php-dir).`, raw: `URL: ${target} | Status: ${resp.status}` };
+        }
         return { success: true, message: `PASS: Plugin is actively blocking directory listing (${vaptEnforced}).`, raw: `URL: ${target} | Status: ${resp.status}\n\n${snippet}` };
+      }
+
+      if (!isEnabled) {
+        return { success: true, message: `Status: Protection Disabled (Intentional). Directory was accessible.`, raw: `URL: ${target} | Status: ${resp.status}` };
       }
 
       return { success: false, message: `Directory browsing blocked (HTTP ${resp.status}), but NOT by this plugin. VAPT enforcement header missing.`, raw: `URL: ${target} | Status: ${resp.status}\n\n${snippet}` };
@@ -338,8 +395,16 @@
       const resp = await fetch(target, { cache: 'no-store' });
       const vaptEnforced = resp.headers.get('x-vapt-enforced');
 
+      const isEnabled = toBool(featureData?.feat_enabled);
       if (vaptEnforced === 'php-null-byte' || resp.status === 400) {
+        if (!isEnabled && vaptEnforced === 'php-null-byte') {
+          return { success: false, message: `Warning: Feature is DISABLED in UI but still being ENFORCED (php-null-byte).`, raw: `URL: ${target} | Status: ${resp.status}` };
+        }
         return { success: true, message: `PASS: Null Byte Injection Blocked (HTTP ${resp.status}). Enforcer: ${vaptEnforced || 'Server'}`, raw: `URL: ${target} | Status: ${resp.status} | Expected: 400 or 403` };
+      }
+
+      if (!isEnabled) {
+        return { success: true, message: `Status: Protection Disabled (Intentional). Payload accepted.`, raw: `URL: ${target} | Status: ${resp.status}` };
       }
 
       return { success: false, message: `FAIL: Null Byte Payload Accepted (HTTP ${resp.status}).`, raw: `URL: ${target} | Status: ${resp.status} | Expected: 400 or 403` };
@@ -448,24 +513,49 @@
         }
       }
 
+      const isEnabled = toBool(featureData?.feat_enabled);
+      const vaptEnforced = resp.headers.get('x-vapt-enforced');
+      const enforcedFeature = resp.headers.get('x-vapt-feature');
+
       const expectsBlock = expectedStatusArray.length > 0 && expectedStatusArray.every(s => s >= 400);
       const expectsAllow = expectedStatusArray.includes(200);
       const hasHeaderCheck = expectedHeaders && typeof expectedHeaders === 'object';
-      const enforcedFeature = resp.headers.get('x-vapt-feature');
 
-      if (hasHeaderCheck) {
+      let message = '';
+
+      if (!isEnabled) {
+        // 🛡️ Precise Leak Detection (v2.4.3): Only FAIL if THIS feature is enforcing.
+        const activeFeatures = enforcedFeature ? enforcedFeature.split(',').map(f => f.trim()) : [];
+        const isThisFeatureEnforcing = activeFeatures.includes(featureKey);
+
+        if (isThisFeatureEnforcing) {
+          isSecure = false;
+          message = `Discrepancy: Feature '${featureKey}' is DISABLED in UI, but server is still ENFORCING it ('${vaptEnforced}').`;
+        } else {
+          isSecure = (code === 200); // Vulnerable = SUCCESS (Intentional)
+          message = isSecure
+            ? `Status: Protection Disabled (Intentional). Site responds normally (HTTP 200).`
+            : `Status: Protection Disabled (Intentional). Site is blocked (HTTP ${code}) by another system.`;
+        }
+      } else if (hasHeaderCheck) {
         isSecure = headerMatches && (code === 200 || expectsAllow || statusMatches);
       } else if (expectsBlock) {
         // Allow 404 and 400 as valid "Blocks" (Global Security Best Practice & REST API Protection)
         const is404Acceptable = code === 404;
-        const is400Acceptable = code === 400; // v3.12.21: REST API blocks often return 400
+        const is400Acceptable = code === 400;
         isSecure = (statusMatches || is404Acceptable || is400Acceptable) && code >= 400;
-      } else if (expectsAllow) {
-        isSecure = code === 200 && (expectedText ? text.includes(expectedText) : true);
       } else if (statusMatches) {
         isSecure = true;
       } else {
-        isSecure = code >= 400;
+        // 🛡️ Resilience Nudge (v3.14.3): If VAPT header exists, 403/404/429 are valid "Secure" blocks 
+        if (vaptEnforced && [403, 404, 429].includes(code)) {
+          isSecure = true;
+          headerMatches = true;
+        } else if (expectsAllow) {
+          isSecure = code === 200 && (expectedText ? text.includes(expectedText) : true);
+        } else {
+          isSecure = code === 200;
+        }
       }
 
       // Helper to resolve feature aliases (v3.6.20)
@@ -494,16 +584,17 @@
         };
       }
 
-      let message = '';
-      if (isSecure) {
+      if (message) {
+        // Message already set by leak detection logic
+      } else if (isSecure) {
         if (hasHeaderCheck && headerMatches) {
           message = `Protection Headers Present (HTTP ${code}). All expected headers verified.`;
         } else if (expectsBlock && statusMatches) {
           message = `Attack Blocked (HTTP ${code}). Expected block code (${expectedStatus}).`;
         } else if (expectsBlock && code === 404) {
-          message = `Attack Blocked (HTTP 404). Resource hidden successfully (Expected ${expectedStatus}).`;
+          message = `Attack Blocked (HTTP 404). Resource hidden successfully.`;
         } else if (expectsBlock && code === 400) {
-          message = `Attack Blocked (HTTP 400). Request rejected as malformed/invalid (Expected ${expectedStatus}).`;
+          message = `Attack Blocked (HTTP 400). Request rejected (Expected ${expectedStatus}).`;
         } else if (expectsAllow && code === 200) {
           message = `Normal Response (HTTP ${code}) with protection indicators.`;
         } else {
@@ -515,12 +606,11 @@
         } else if (hasHeaderCheck && !headerMatches) {
           if (expectsBlock && statusMatches) {
             isSecure = true;
-            message = `PASS: Request was blocked (HTTP ${code}). Note: VAPT enforcement header is missing, indicating a Server-Level block (e.g., .htaccess or Firewall) instead of PHP.`;
+            message = `PASS: Request was blocked (HTTP ${code}). Note: Server-Level block detected.`;
           } else {
-            // New logic: Check if it's actually missing or just mismatching
-            const vaptEnforced = resp.headers.get('x-vapt-enforced');
-            if (vaptEnforced) {
-              message = `Header Mismatch (HTTP ${code}). VAPT is active (${vaptEnforced}) but headers do not match expected values.`;
+            const vaptEnforcedHeader = resp.headers.get('x-vapt-enforced');
+            if (vaptEnforcedHeader) {
+              message = `Header Mismatch (HTTP ${code}). VAPT is active but headers do not match expected values.`;
             } else {
               message = `Missing Protection Headers (HTTP ${code}). Verification failed.`;
             }
@@ -984,20 +1074,6 @@
       );
     }
 
-    // Identify if this is a Rate Limiting feature
-    const isRateLimit = feature.key?.includes('limit') || feature.key?.includes('brute') ||
-      (schema.enforcement?.mappings && Object.values(schema.enforcement.mappings).includes('limit_login_attempts'));
-
-    // v3.14.1 - Reverted to onUpdate-only to allow Workbench.js to handle saves
-    const handleChange = (key, value) => {
-      const updatedData = { ...currentData, [key]: value };
-      if (onUpdate) onUpdate(updatedData);
-    };
-    const toBool = (val) => {
-      if (val === true || val === 1 || val === '1' || val === 'true' || val === 'on') return true;
-      return false;
-    };
-
     const isRemovalContext = (key, currentVal) => {
       const status = statusMap[key];
       if (!status) return false;
@@ -1008,6 +1084,9 @@
       ((feature.normalized_status || feature.status || 'draft').toLowerCase() === 'release' ?
         (feature.is_enforced != 0) : (feature.is_enforced == 1))
       : false;
+
+    // Derived flags for rendering logic
+    const isRateLimit = ['RISK-033', 'RISK-039'].includes(feature.key || feature.id) || !!feature.is_rate_limit;
 
     const renderControl = (control, index) => {
       const { type, label, key, help, options, rows, action } = control;
@@ -1038,7 +1117,7 @@
           const isDevelop = (feature.status || '').toLowerCase() === 'develop' || (feature.normalized_status || '').toLowerCase() === 'develop';
           const isSuperAdmin = window.vaptSecureSettings?.isSuper || false;
 
-          return el('div', { key: uniqueKey, style: { marginBottom: '15px' } }, [
+          return el('div', { id: control.id, key: uniqueKey, style: { marginBottom: '0' } }, [
             el(ToggleControl, {
               disabled: globalProtection === false,
               label: el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } }, [
@@ -1140,7 +1219,7 @@
           ]);
 
         case 'input':
-          return el('div', { key: uniqueKey, style: { marginBottom: '15px', padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px' } }, [
+          return el('div', { id: control.id || `vapt-input-wrapper-${uniqueKey}`, key: uniqueKey, style: { marginBottom: '15px', padding: '10px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '4px' } }, [
             el(TextControl, {
               label: el('strong', null, safeRender(label)),
               help: safeRender(help),
@@ -1163,7 +1242,7 @@
 
         case 'textarea':
         case 'code':
-          return el('div', { key: uniqueKey, style: { marginBottom: '10px' } }, [
+          return el('div', { id: control.id || `vapt-text-wrapper-${uniqueKey}`, key: uniqueKey, style: { marginBottom: '10px' } }, [
             el('div', { style: { display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px' } }, [
               el('label', { style: { fontSize: '12px', fontWeight: '600', color: '#334155' } }, safeRender(label)),
               help && el(Tooltip, { text: safeRender(help) }, el(Icon, { icon: 'info-outline', size: 14, style: { color: '#94a3b8', cursor: 'help' } }))
@@ -1179,20 +1258,20 @@
           ]);
 
         case 'header':
-          return el('h3', { key: uniqueKey, style: { fontSize: '14px', fontWeight: '700', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginTop: '8px', marginBottom: '8px', color: '#1e293b' } }, safeRender(label));
+          return el('h3', { id: control.id || `vapt-header-${uniqueKey}`, key: uniqueKey, style: { fontSize: '14px', fontWeight: '700', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginTop: '8px', marginBottom: '8px', color: '#1e293b' } }, safeRender(label));
 
         case 'section':
-          return el('h4', { key: uniqueKey, style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b', marginTop: '12px', marginBottom: '6px', letterSpacing: '0.025em' } }, safeRender(label));
+          return el('h4', { id: control.id || `vapt-section-${uniqueKey}`, key: uniqueKey, style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#64748b', marginTop: '12px', marginBottom: '6px', letterSpacing: '0.025em' } }, safeRender(label));
 
         case 'risk_indicators':
-          return el('div', { key: uniqueKey, style: { padding: '10px 0' } }, [
+          return el('div', { id: control.id || `vapt-risks-${uniqueKey}`, key: uniqueKey, style: { padding: '10px 0' } }, [
             label && el('strong', { style: { display: 'block', fontSize: '11px', color: '#991b1b', marginBottom: '5px', textTransform: 'uppercase' } }, safeRender(label)),
             el('ul', { style: { margin: 0, paddingLeft: '18px', color: '#b91c1c', fontSize: '12px', listStyleType: 'disc' } },
               (control.risks || control.items || []).map((r, i) => el('li', { key: i, style: { marginBottom: '4px' } }, safeRender(r))))
           ]);
 
         case 'assurance_badges':
-          return el('div', { key: uniqueKey, style: { display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '10px 0', marginTop: '10px', borderTop: '1px solid #fed7aa' } },
+          return el('div', { id: control.id || `vapt-badges-${uniqueKey}`, key: uniqueKey, style: { display: 'flex', gap: '8px', flexWrap: 'wrap', padding: '10px 0', marginTop: '10px', borderTop: '1px solid #fed7aa' } },
             (control.badges || control.items || []).map((b, i) => el('span', { key: i, style: { display: 'flex', alignItems: 'center', background: '#ffffff', color: '#166534', padding: '4px 10px', borderRadius: '15px', fontSize: '12px', border: '1px solid #bbf7d0', fontWeight: '600', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' } }, [
               el('span', { style: { marginRight: '6px', fontSize: '14px' } }, '🛡️'),
               safeRender(b)
@@ -1201,7 +1280,7 @@
 
         case 'test_checklist':
         case 'evidence_list':
-          return el('div', { key: uniqueKey, style: { marginBottom: '10px' } }, [
+          return el('div', { id: control.id || `vapt-list-wrapper-${uniqueKey}`, key: uniqueKey, style: { marginBottom: '10px' } }, [
             label && el('strong', { style: { display: 'block', fontSize: '12px', color: '#334155', marginBottom: '6px' } }, safeRender(label)),
             el('ol', { style: { margin: 0, paddingLeft: '20px', color: '#475569', fontSize: '12px' } },
               (control.items || control.tests || control.checklist || control.evidence || []).map((item, i) => el('li', { key: i, style: { marginBottom: '4px' } }, safeRender(item))))
@@ -1209,7 +1288,23 @@
 
         case 'info':
         case 'html':
-          return el('div', { key: uniqueKey, style: { padding: '8px 12px', background: '#f0f9ff', borderLeft: '3px solid #0ea5e9', fontSize: '11px', color: '#0c4a6e', marginBottom: '8px', lineHeight: '1.4' }, dangerouslySetInnerHTML: { __html: control.content || control.html || label } });
+          return el('div', {
+            id: control.id || `vapt-info-${uniqueKey}`,
+            key: uniqueKey,
+            style: {
+              padding: '16px 20px',
+              background: '#ffffff',
+              border: '1px solid #e2e8f0',
+              borderTop: '3px solid #0ea5e9',
+              borderRadius: '8px',
+              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+              fontSize: '12.5px',
+              color: '#334155',
+              marginBottom: '15px',
+              lineHeight: '1.6'
+            },
+            dangerouslySetInnerHTML: { __html: control.content || control.html || label }
+          });
 
         case 'warning':
         case 'alert':
@@ -1224,6 +1319,7 @@
           };
           const style = alertMap[alertType] || alertMap.info;
           return el('div', {
+            id: control.id || `vapt-alert-${uniqueKey}`,
             key: uniqueKey,
             style: {
               display: 'flex',
@@ -1417,27 +1513,28 @@
 
     return el('div', { className: 'vapt-generated-interface', style: { display: 'flex', flexDirection: 'column', gap: '20px' } }, [
 
-      // 🛡️ Operational Notes (v3.12.18) - Collapsible (v3.12.20)
-      !hideOpNotes && opNotes && el('details', {
-        className: 'vapt-op-notes',
-        open: false, // Default collapsed
+      // 🛡️ Operational Notes (v3.12.18) - Card UI Transition (v2.4.3)
+      !hideOpNotes && opNotes && el('div', {
+        className: 'vapt-op-notes-card',
+        id: 'vapt-op-notes-container',
         style: {
-          padding: '12px 15px',
-          background: '#f0fdfa',
-          border: '1px solid #ccfbf1',
-          borderLeft: '4px solid #0d9488',
-          borderRadius: '6px',
+          padding: '16px 20px',
+          background: '#ffffff',
+          border: '1px solid #e2e8f0',
+          borderTop: '3px solid #0d9488',
+          borderRadius: '8px',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
           fontSize: '13px',
-          color: '#134e4a',
-          lineHeight: '1.5',
+          color: '#334155',
+          lineHeight: '1.6',
           marginBottom: '20px'
         }
       }, [
-        el('summary', { style: { fontWeight: '700', cursor: 'pointer', outline: 'none', listStyle: 'none', display: 'flex', alignItems: 'center', gap: '6px' } }, [
+        el('div', { style: { display: 'flex', alignItems: 'center', gap: '8px', color: '#0d9488', fontWeight: '700', fontSize: '11px', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '10px' } }, [
           el(Icon, { icon: 'info', size: 16 }),
           __('Business Impact & Security Benefit', 'vaptsecure')
         ]),
-        el('div', { style: { marginTop: '10px' } },
+        el('div', { style: { color: '#475569' } },
           typeof opNotes === 'string' ? linkify(opNotes) : JSON.stringify(opNotes)
         )
       ]),

@@ -1,0 +1,10 @@
+---
+name: UI Element Identification Policy
+description: Enforces the use of unique IDs for UI elements, especially those using inline styles, to facilitate testing and clear identification.
+---
+
+When generating or modifying UI components (React/HTML):
+- Always add a unique, descriptive `id` attribute to each `div` or interactive element.
+- This is especially critical when inline CSS (`style` attribute) is used instead of CSS classes.
+- Ensure IDs are predictable and follow a consistent naming convention related to the component's function (e.g., `vapt-protection-summary-{riskId}`).
+- These IDs are essential for automated browser testing and accessibility.

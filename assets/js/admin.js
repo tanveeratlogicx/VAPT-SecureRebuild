@@ -1405,6 +1405,7 @@ window.vaptScriptLoaded = true;
     // Helper to generate SelectControl for a mapping field
     const renderMappingSelect = (label, key) => {
       return el(SelectControl, {
+        id: `vapt-mapping-select-${key}`,
         label: label,
         value: fieldMapping[key] || '',
         options: [{ label: __('--- Select Source Field ---', 'vaptsecure'), value: '' }, ...allKeys.map(k => ({ label: k, value: k }))],
@@ -1445,6 +1446,10 @@ window.vaptScriptLoaded = true;
       // interface_schema_v2.0 fields
       autoMapField('available_platforms', ['available_platforms', 'platforms', 'platform_list']);
       autoMapField('platform_implementations', ['platform_implementations', 'implementations', 'enforcer_map']);
+
+      // Additional Context fields
+      autoMapField('operational_notes', ['operational_notes', 'notes', 'operation_notes', 'operation_details']);
+      autoMapField('verification_steps', ['verification_steps', 'manual_verification', 'steps', 'test_method', 'verification']);
 
       setFieldMapping(newMapping);
       if (mappedCount === 0) {
@@ -1511,6 +1516,7 @@ window.vaptScriptLoaded = true;
 
       // Container
       el('div', {
+        id: 'vapt-mapping-modal-container',
         style: {
           display: 'flex',
           flexDirection: 'column',
@@ -1524,6 +1530,7 @@ window.vaptScriptLoaded = true;
 
         // Final Sticky Header (Actions + Title)
         el('div', {
+          id: 'vapt-mapping-modal-header',
           style: {
             padding: '18px 25px',
             borderBottom: '1px solid #dcdcde',
@@ -1541,16 +1548,17 @@ window.vaptScriptLoaded = true;
               __('Map JSON fields for context-aware prompts.', 'vaptsecure')
             )
           ]),
-          el('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 } }, [
-            el(Button, { isSecondary: true, onClick: handleAutoMap, style: { height: '32px' } }, __('Auto Map', 'vaptsecure')),
-            el(Button, { isDestructive: true, isSecondary: true, onClick: handleReset, style: { height: '32px' } }, __('Reset', 'vaptsecure')),
-            el(Button, { isTertiary: true, onClick: onClose, style: { height: '32px' } }, __('Cancel', 'vaptsecure')),
-            el(Button, { isPrimary: true, onClick: onClose, style: { height: '32px' } }, __('Done', 'vaptsecure'))
+          el('div', { id: 'vapt-mapping-modal-actions', style: { display: 'flex', gap: '8px', alignItems: 'center', flexShrink: 0 } }, [
+            el(Button, { id: 'vapt-button-automap', isSecondary: true, onClick: handleAutoMap, style: { height: '32px' } }, __('Auto Map', 'vaptsecure')),
+            el(Button, { id: 'vapt-button-reset', isDestructive: true, isSecondary: true, onClick: handleReset, style: { height: '32px' } }, __('Reset', 'vaptsecure')),
+            el(Button, { id: 'vapt-button-cancel', isTertiary: true, onClick: onClose, style: { height: '32px' } }, __('Cancel', 'vaptsecure')),
+            el(Button, { id: 'vapt-button-done', isPrimary: true, onClick: onClose, style: { height: '32px' } }, __('Done', 'vaptsecure'))
           ])
         ]),
 
         // Content - Fixed scrolling with min-height constraint
         el('div', {
+          id: 'vapt-mapping-modal-body',
           className: 'vapt-mapping-scroll-body',
           style: {
             flex: '1 1 auto',
@@ -1565,12 +1573,12 @@ window.vaptScriptLoaded = true;
           el('div', { style: { display: 'flex', flexDirection: 'column', gap: '0' } }, [
 
             // ── SECTION 1: Core Context ──────────────────────────────────────
-            el('h3', { style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#8c8f94', borderBottom: '1px solid #dcdcde', paddingBottom: '8px', marginBottom: '15px', marginTop: '0', letterSpacing: '0.5px' } }, __('Core Context Fields')),
+            el('h3', { id: 'vapt-mapping-section-core', style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#8c8f94', borderBottom: '1px solid #dcdcde', paddingBottom: '8px', marginBottom: '15px', marginTop: '0', letterSpacing: '0.5px' } }, __('Core Context Fields')),
             renderMappingSelect(__('Description / Summary', 'vaptsecure'), 'description'),
             renderMappingSelect(__('Severity Level', 'vaptsecure'), 'severity'),
 
             // ── SECTION 2: UI Schema Fields ──────────────────────────────────
-            el('h3', { style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#8c8f94', borderBottom: '1px solid #dcdcde', paddingBottom: '8px', marginBottom: '15px', marginTop: '20px', letterSpacing: '0.5px' } }, __('UI Schema Parameters')),
+            el('h3', { id: 'vapt-mapping-section-ui', style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#8c8f94', borderBottom: '1px solid #dcdcde', paddingBottom: '8px', marginBottom: '15px', marginTop: '20px', letterSpacing: '0.5px' } }, __('UI Schema Parameters')),
             el('p', { style: { margin: '0 0 12px 0', fontSize: '12px', color: '#646970', lineHeight: '1.5' } },
               __('Fields required for generating >95% accurate interactive UI schema.', 'vaptsecure')
             ),
@@ -1579,12 +1587,20 @@ window.vaptScriptLoaded = true;
             renderMappingSelect(__('Actions Array', 'vaptsecure'), 'actions'),
 
             // ── SECTION 3: Platform & Enforcement ────────────────────────────
-            el('h3', { style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#8c8f94', borderBottom: '1px solid #dcdcde', paddingBottom: '8px', marginBottom: '15px', marginTop: '20px', letterSpacing: '0.5px' } }, __('Platform & Enforcement')),
+            el('h3', { id: 'vapt-mapping-section-platform', style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#8c8f94', borderBottom: '1px solid #dcdcde', paddingBottom: '8px', marginBottom: '15px', marginTop: '20px', letterSpacing: '0.5px' } }, __('Platform & Enforcement')),
             el('p', { style: { margin: '0 0 12px 0', fontSize: '12px', color: '#646970', lineHeight: '1.5' } },
               __('Controls which platform list and implementations are injected into the AI prompt.', 'vaptsecure')
             ),
             renderMappingSelect(__('Available Platforms (array)', 'vaptsecure'), 'available_platforms'),
             renderMappingSelect(__('Platform Implementations (object)', 'vaptsecure'), 'platform_implementations'),
+
+            // ── SECTION 4: Additional Context ────────────────────────────────
+            el('h3', { id: 'vapt-mapping-section-additional', style: { fontSize: '11px', fontWeight: '700', textTransform: 'uppercase', color: '#8c8f94', borderBottom: '1px solid #dcdcde', paddingBottom: '8px', marginBottom: '15px', marginTop: '20px', letterSpacing: '0.5px' } }, __('Additional Context')),
+            el('p', { style: { margin: '0 0 12px 0', fontSize: '12px', color: '#646970', lineHeight: '1.5' } },
+              __('Map specific fields for operational notes and manual verification steps.', 'vaptsecure')
+            ),
+            renderMappingSelect(__('Operational Context', 'vaptsecure'), 'operational_notes'),
+            renderMappingSelect(__('Verification Steps', 'vaptsecure'), 'verification_steps'),
           ])
         ])
       ])

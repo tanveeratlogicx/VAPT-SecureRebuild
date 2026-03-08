@@ -523,9 +523,17 @@
     ]);
   };
 
+  // Robust DOM-ready: handles 'loading', 'interactive', and 'complete' states
   const init = () => {
     const container = document.getElementById('vapt-workbench-root');
     if (container) render(el(ClientDashboard), container);
+    else console.error('VAPT Secure: #vapt-workbench-root not found!');
   };
-  if (document.readyState === 'complete') init(); else document.addEventListener('DOMContentLoaded', init);
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    // readyState is 'interactive' or 'complete' — DOM is already ready
+    init();
+  }
 })();

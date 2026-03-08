@@ -253,288 +253,293 @@ class VAPTSECURE_REST
 
   public function get_features($request)
   {
-    $default_file = defined('VAPTSECURE_ACTIVE_DATA_FILE') ? VAPTSECURE_ACTIVE_DATA_FILE : 'interface_schema_v2.0.json';
-    $requested_file = $request->get_param('file') ?: $default_file;
+    try {
+      $default_file = defined('VAPTSECURE_ACTIVE_DATA_FILE') ? VAPTSECURE_ACTIVE_DATA_FILE : 'interface_schema_v2.0.json';
+      $requested_file = $request->get_param('file') ?: $default_file;
 
-    // 1. Resolve which files to load
-    $files_to_load = [];
-    if ($requested_file === '__all__') {
-      $data_dir = VAPTSECURE_PATH . 'data';
-      if (is_dir($data_dir)) {
-        $all_json = array_filter(scandir($data_dir), function ($f) {
-          return strtolower(pathinfo($f, PATHINFO_EXTENSION)) === 'json';
-        });
-        $hidden_files = get_option('vaptsecure_hidden_json_files', array());
-        $removed_files = get_option('vaptsecure_removed_json_files', array());
-        $hidden_normalized = array_map('sanitize_file_name', $hidden_files);
-        $removed_normalized = array_map('sanitize_file_name', $removed_files);
+      // 1. Resolve which files to load
+      $files_to_load = [];
+      if ($requested_file === '__all__') {
+        $data_dir = VAPTSECURE_PATH . 'data';
+        if (is_dir($data_dir)) {
+          $all_json = array_filter(scandir($data_dir), function ($f) {
+            return strtolower(pathinfo($f, PATHINFO_EXTENSION)) === 'json';
+          });
+          $hidden_files = get_option('vaptsecure_hidden_json_files', array());
+          $removed_files = get_option('vaptsecure_removed_json_files', array());
+          $hidden_normalized = array_map('sanitize_file_name', $hidden_files);
+          $removed_normalized = array_map('sanitize_file_name', $removed_files);
 
-        foreach ($all_json as $f) {
-          $normalized = sanitize_file_name($f);
-          if (!in_array($normalized, $hidden_normalized) && !in_array($normalized, $removed_normalized)) {
-            $files_to_load[] = $f;
+          foreach ($all_json as $f) {
+            $normalized = sanitize_file_name($f);
+            if (!in_array($normalized, $hidden_normalized) && !in_array($normalized, $removed_normalized)) {
+              $files_to_load[] = $f;
+            }
           }
         }
+      } else {
+        $files_to_load = array_filter(explode(',', $requested_file));
       }
-    } else {
-      $files_to_load = array_filter(explode(',', $requested_file));
-    }
 
-    // v3.12.1: Final filter against existence to prevent stale entries
-    $files_to_load = array_filter($files_to_load, function ($f) {
-      return file_exists(VAPTSECURE_PATH . 'data/' . sanitize_file_name($f));
-    });
+      // v3.12.1: Final filter against existence to prevent stale entries
+      $files_to_load = array_filter($files_to_load, function ($f) {
+        return file_exists(VAPTSECURE_PATH . 'data/' . sanitize_file_name($f));
+      });
 
-    // 2. Pre-fetch global state (Status map and History counts)
-    $statuses = VAPTSECURE_DB::get_feature_statuses_full();
-    $status_map = [];
-    foreach ($statuses as $row) {
-      $status_map[$row['feature_key']] = array(
-        'status' => $row['status'],
-        'implemented_at' => $row['implemented_at'],
-        'assigned_to' => $row['assigned_to']
-      );
-    }
+      // 2. Pre-fetch global state (Status map and History counts)
+      $statuses = VAPTSECURE_DB::get_feature_statuses_full();
+      $status_map = [];
+      foreach ($statuses as $row) {
+        $status_map[$row['feature_key']] = array(
+          'status' => $row['status'],
+          'implemented_at' => $row['implemented_at'],
+          'assigned_to' => $row['assigned_to']
+        );
+      }
 
-    global $wpdb;
-    $history_table = $wpdb->prefix . 'vaptsecure_feature_history';
-    $history_counts = $wpdb->get_results("SELECT feature_key, COUNT(*) as count FROM $history_table GROUP BY feature_key", OBJECT_K);
+      global $wpdb;
+      $history_table = $wpdb->prefix . 'vaptsecure_feature_history';
+      $history_counts = $wpdb->get_results("SELECT feature_key, COUNT(*) as count FROM $history_table GROUP BY feature_key", OBJECT_K);
 
-    $is_superadmin = is_vaptsecure_superadmin();
-    $scope = $request->get_param('scope');
+      $is_superadmin = is_vaptsecure_superadmin();
+      $scope = $request->get_param('scope');
 
-    $features = [];
-    $schema = [];
-    $merged_features = []; // Track by normalized label
-    $design_prompt = null;
-    $ai_agent_instructions = null;
-    $global_settings = null;
+      $features = [];
+      $schema = [];
+      $merged_features = []; // Track by normalized label
+      $design_prompt = null;
+      $ai_agent_instructions = null;
+      $global_settings = null;
 
-    // 3. Load and process each file
-    foreach ($files_to_load as $file) {
-      $json_path = VAPTSECURE_PATH . 'data/' . sanitize_file_name($file);
-      if (! file_exists($json_path)) continue;
+      // 3. Load and process each file
+      foreach ($files_to_load as $file) {
+        $json_path = VAPTSECURE_PATH . 'data/' . sanitize_file_name($file);
+        if (! file_exists($json_path)) continue;
 
-      $content = file_get_contents($json_path);
-      $raw_data = json_decode($content, true);
-      if (! is_array($raw_data)) continue;
+        $content = file_get_contents($json_path);
+        $raw_data = json_decode($content, true);
+        if (! is_array($raw_data)) continue;
 
-      if (!$design_prompt && isset($raw_data['design_prompt'])) $design_prompt = $raw_data['design_prompt'];
-      if (!$ai_agent_instructions && isset($raw_data['ai_agent_instructions'])) $ai_agent_instructions = $raw_data['ai_agent_instructions'];
-      if (!$global_settings && isset($raw_data['global_settings'])) $global_settings = $raw_data['global_settings'];
+        if (!$design_prompt && isset($raw_data['design_prompt'])) $design_prompt = $raw_data['design_prompt'];
+        if (!$ai_agent_instructions && isset($raw_data['ai_agent_instructions'])) $ai_agent_instructions = $raw_data['ai_agent_instructions'];
+        if (!$global_settings && isset($raw_data['global_settings'])) $global_settings = $raw_data['global_settings'];
 
-      $current_features = [];
-      $current_schema = [];
+        $current_features = [];
+        $current_schema = [];
 
-      if (isset($raw_data['wordpress_vapt']) && is_array($raw_data['wordpress_vapt'])) {
-        $current_features = $raw_data['wordpress_vapt'];
-        $current_schema = isset($raw_data['schema']) ? $raw_data['schema'] : [];
-      } elseif (isset($raw_data['features']) && is_array($raw_data['features'])) {
-        $current_features = $raw_data['features'];
-        $current_schema = isset($raw_data['schema']) ? $raw_data['schema'] : [];
-      } elseif (isset($raw_data['risk_catalog']) && is_array($raw_data['risk_catalog'])) {
-        foreach ($raw_data['risk_catalog'] as $item) {
-          if (isset($item['risk_id']) && empty($item['id'])) $item['id'] = $item['risk_id'];
-          if (isset($item['risk_id']) && empty($item['key'])) $item['key'] = $item['risk_id'];
-          if (isset($item['description']) && is_array($item['description'])) {
-            $item['original_description'] = $item['description'];
-            $item['description'] = isset($item['description']['summary']) ? $item['description']['summary'] : '';
+        if (isset($raw_data['wordpress_vapt']) && is_array($raw_data['wordpress_vapt'])) {
+          $current_features = $raw_data['wordpress_vapt'];
+          $current_schema = isset($raw_data['schema']) ? $raw_data['schema'] : [];
+        } elseif (isset($raw_data['features']) && is_array($raw_data['features'])) {
+          $current_features = $raw_data['features'];
+          $current_schema = isset($raw_data['schema']) ? $raw_data['schema'] : [];
+        } elseif (isset($raw_data['risk_catalog']) && is_array($raw_data['risk_catalog'])) {
+          foreach ($raw_data['risk_catalog'] as $item) {
+            if (isset($item['risk_id']) && empty($item['id'])) $item['id'] = $item['risk_id'];
+            if (isset($item['risk_id']) && empty($item['key'])) $item['key'] = $item['risk_id'];
+            if (isset($item['description']) && is_array($item['description'])) {
+              $item['original_description'] = $item['description'];
+              $item['description'] = isset($item['description']['summary']) ? $item['description']['summary'] : '';
+            }
+            if (isset($item['severity']) && is_array($item['severity'])) {
+              $item['original_severity'] = $item['severity'];
+              $item['severity'] = isset($item['severity']['level']) ? $item['severity']['level'] : 'medium';
+            }
+            if (empty($item['test_method']) && isset($item['testing']['test_method'])) $item['test_method'] = $item['testing']['test_method'];
+
+            // Hyper-Personalization: Attach source-specific root nodes to each feature (v3.13.1)
+            $item['root_design_prompt'] = isset($raw_data['design_prompt']) ? $raw_data['design_prompt'] : null;
+            $item['root_ai_agent_instructions'] = isset($raw_data['ai_agent_instructions']) ? $raw_data['ai_agent_instructions'] : null;
+            $item['root_global_settings'] = isset($raw_data['global_settings']) ? $raw_data['global_settings'] : null;
+            $item['source_file'] = $file;
+
+            if (empty($item['verification_engine']) && isset($item['protection']['automated_protection'])) $item['verification_engine'] = $item['protection']['automated_protection'];
+            if (isset($item['testing']) && isset($item['testing']['verification_steps']) && is_array($item['testing']['verification_steps'])) {
+              $steps = [];
+              foreach ($item['testing']['verification_steps'] as $step) {
+                if (is_array($step) && isset($step['action'])) $steps[] = $step['action'];
+                elseif (is_string($step)) $steps[] = $step;
+              }
+              $item['verification_steps'] = $steps;
+            }
+            if (isset($item['protection']) && is_array($item['protection'])) {
+              if (isset($item['protection']['automated_protection']['implementation_steps'][0]['code'])) {
+                $item['remediation'] = $item['protection']['automated_protection']['implementation_steps'][0]['code'];
+              }
+            }
+            if (isset($item['owasp_mapping']) && isset($item['owasp_mapping']['owasp_top_10_2021'])) $item['owasp'] = $item['owasp_mapping']['owasp_top_10_2021'];
+            $current_features[] = $item;
           }
-          if (isset($item['severity']) && is_array($item['severity'])) {
-            $item['original_severity'] = $item['severity'];
-            $item['severity'] = isset($item['severity']['level']) ? $item['severity']['level'] : 'medium';
+          $current_schema = isset($raw_data['schema']) ? $raw_data['schema'] : [];
+        } elseif (isset($raw_data['risk_interfaces']) && is_array($raw_data['risk_interfaces'])) {
+          // 🛡️ INTERFACE SCHEMA FORMAT (risk_interfaces node — e.g. interface_schema_full125.json)
+          // Converts the keyed RISK-NNN dictionary into the standard flat feature array.
+          foreach ($raw_data['risk_interfaces'] as $risk_key => $item) {
+            $item['id']          = isset($item['risk_id'])  ? $item['risk_id']  : $risk_key;
+            $item['key']         = $item['id'];
+            $item['name']        = isset($item['title'])    ? $item['title']    : $risk_key;
+            $item['label']       = $item['name'];
+            // Map summary → description so the Feature List "Description" column is populated
+            if (!isset($item['description']) && isset($item['summary'])) {
+              $item['description'] = $item['summary'];
+            }
+            // Flatten severity if it is an object (guard for mixed catalogues)
+            if (isset($item['severity']) && is_array($item['severity'])) {
+              $item['severity'] = isset($item['severity']['level']) ? $item['severity']['level'] : 'medium';
+            }
+            // Attach root-level metadata for Hyper-Personalization compatibility
+            $item['root_design_prompt']          = null;
+            $item['root_ai_agent_instructions']  = null;
+            $item['root_global_settings']        = isset($raw_data['global_ui_config']) ? $raw_data['global_ui_config'] : null;
+            $item['source_file']                 = $file;
+            $current_features[] = $item;
           }
-          if (empty($item['test_method']) && isset($item['testing']['test_method'])) $item['test_method'] = $item['testing']['test_method'];
+          $current_schema = isset($raw_data['schema']) ? $raw_data['schema'] : array(
+            'item_fields' => array('id', 'category', 'title', 'severity', 'description')
+          );
+        } else {
+          $current_features = $raw_data;
+        }
+
+        if (empty($schema) && !empty($current_schema)) $schema = $current_schema;
+
+        foreach ($current_features as &$feature) {
+          $label = isset($feature['name']) ? $feature['name'] : (isset($feature['title']) ? $feature['title'] : (isset($feature['label']) ? $feature['label'] : __('Unnamed Feature', 'vaptsecure')));
+          $feature['label'] = $label;
 
           // Hyper-Personalization: Attach source-specific root nodes to each feature (v3.13.1)
-          $item['root_design_prompt'] = isset($raw_data['design_prompt']) ? $raw_data['design_prompt'] : null;
-          $item['root_ai_agent_instructions'] = isset($raw_data['ai_agent_instructions']) ? $raw_data['ai_agent_instructions'] : null;
-          $item['root_global_settings'] = isset($raw_data['global_settings']) ? $raw_data['global_settings'] : null;
-          $item['source_file'] = $file;
+          $feature['root_design_prompt'] = isset($raw_data['design_prompt']) ? $raw_data['design_prompt'] : null;
+          $feature['root_ai_agent_instructions'] = isset($raw_data['ai_agent_instructions']) ? $raw_data['ai_agent_instructions'] : null;
+          $feature['root_global_settings'] = isset($raw_data['global_settings']) ? $raw_data['global_settings'] : null;
+          // The source_file is already set below, but for consistency with the risk_catalog block, we can add it here too.
+          // However, the existing line `feature['source_file'] = $file;` is sufficient.
 
-          if (empty($item['verification_engine']) && isset($item['protection']['automated_protection'])) $item['verification_engine'] = $item['protection']['automated_protection'];
-          if (isset($item['testing']) && isset($item['testing']['verification_steps']) && is_array($item['testing']['verification_steps'])) {
-            $steps = [];
-            foreach ($item['testing']['verification_steps'] as $step) {
-              if (is_array($step) && isset($step['action'])) $steps[] = $step['action'];
-              elseif (is_string($step)) $steps[] = $step;
+          $key = isset($feature['id']) ? $feature['id'] : (isset($feature['key']) ? $feature['key'] : sanitize_title($label));
+          $feature['key'] = $key;
+
+          $dedupe_key = strtolower(trim($label));
+
+          if (isset($merged_features[$dedupe_key])) {
+            $merged_features[$dedupe_key]['exists_in_multiple_files'] = true;
+            continue;
+          }
+
+          $st = isset($status_map[$key]) ? $status_map[$key] : array('status' => 'Draft', 'implemented_at' => null, 'assigned_to' => null);
+          $norm_status = strtolower($st['status']);
+          if ($norm_status === 'implemented') $norm_status = 'release';
+          if ($norm_status === 'in_progress') $norm_status = 'develop';
+          if ($norm_status === 'testing')     $norm_status = 'test';
+          if ($norm_status === 'available')   $norm_status = 'draft';
+          $feature['normalized_status'] = $norm_status;
+          $feature['status'] = ucfirst($norm_status);
+          $feature['implemented_at'] = $st['implemented_at'];
+          $feature['assigned_to'] = $st['assigned_to'];
+          $feature['has_history'] = isset($history_counts[$key]) && $history_counts[$key]->count > 0;
+          $feature['source_file'] = $file;
+          $feature['exists_in_multiple_files'] = false;
+
+          $meta = VAPTSECURE_DB::get_feature_meta($key);
+          if ($meta) {
+            $feature['include_test_method'] = (bool) $meta['include_test_method'];
+            $feature['include_verification'] = (bool) $meta['include_verification'];
+            $feature['include_verification_engine'] = isset($meta['include_verification_engine']) ? (bool) $meta['include_verification_engine'] : false;
+            $feature['include_verification_guidance'] = isset($meta['include_verification_guidance']) ? (bool) $meta['include_verification_guidance'] : true;
+            $feature['is_enforced'] = (bool) $meta['is_enforced'];
+            $feature['is_adaptive_deployment'] = isset($meta['is_adaptive_deployment']) ? (bool) $meta['is_adaptive_deployment'] : false;
+            $feature['wireframe_url'] = $meta['wireframe_url'];
+            $feature['dev_instruct'] = isset($meta['dev_instruct']) ? $meta['dev_instruct'] : '';
+
+            $schema_data = array();
+            $use_override_schema = in_array($norm_status, ['test', 'release']) && !empty($meta['override_schema']);
+            $source_schema_json = $use_override_schema ? $meta['override_schema'] : $meta['generated_schema'];
+            if (!empty($source_schema_json)) {
+              $decoded = json_decode($source_schema_json, true);
+              if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                $schema_data = $decoded;
+                // [v3.12.17] Translate URL placeholders when returning schema to UI
+                $schema_data = self::translate_url_placeholders($schema_data);
+                if ($use_override_schema) $feature['is_overridden'] = true;
+              }
             }
-            $item['verification_steps'] = $steps;
-          }
-          if (isset($item['protection']) && is_array($item['protection'])) {
-            if (isset($item['protection']['automated_protection']['implementation_steps'][0]['code'])) {
-              $item['remediation'] = $item['protection']['automated_protection']['implementation_steps'][0]['code'];
+            $feature['generated_schema'] = $schema_data;
+            $source_impl_json = (in_array($norm_status, ['test', 'release']) && !empty($meta['override_implementation_data'])) ? $meta['override_implementation_data'] : $meta['implementation_data'];
+            $feature['implementation_data'] = $source_impl_json ? json_decode($source_impl_json, true) : array();
+
+            // [v3.12.17] Include manual_protocol and operational_notes in response
+            if (!empty($meta['manual_protocol_content'])) {
+              $feature['manual_protocol'] = $meta['manual_protocol_content'];
             }
-          }
-          if (isset($item['owasp_mapping']) && isset($item['owasp_mapping']['owasp_top_10_2021'])) $item['owasp'] = $item['owasp_mapping']['owasp_top_10_2021'];
-          $current_features[] = $item;
-        }
-        $current_schema = isset($raw_data['schema']) ? $raw_data['schema'] : [];
-      } elseif (isset($raw_data['risk_interfaces']) && is_array($raw_data['risk_interfaces'])) {
-        // 🛡️ INTERFACE SCHEMA FORMAT (risk_interfaces node — e.g. interface_schema_full125.json)
-        // Converts the keyed RISK-NNN dictionary into the standard flat feature array.
-        foreach ($raw_data['risk_interfaces'] as $risk_key => $item) {
-          $item['id']          = isset($item['risk_id'])  ? $item['risk_id']  : $risk_key;
-          $item['key']         = $item['id'];
-          $item['name']        = isset($item['title'])    ? $item['title']    : $risk_key;
-          $item['label']       = $item['name'];
-          // Map summary → description so the Feature List "Description" column is populated
-          if (!isset($item['description']) && isset($item['summary'])) {
-            $item['description'] = $item['summary'];
-          }
-          // Flatten severity if it is an object (guard for mixed catalogues)
-          if (isset($item['severity']) && is_array($item['severity'])) {
-            $item['severity'] = isset($item['severity']['level']) ? $item['severity']['level'] : 'medium';
-          }
-          // Attach root-level metadata for Hyper-Personalization compatibility
-          $item['root_design_prompt']          = null;
-          $item['root_ai_agent_instructions']  = null;
-          $item['root_global_settings']        = isset($raw_data['global_ui_config']) ? $raw_data['global_ui_config'] : null;
-          $item['source_file']                 = $file;
-          $current_features[] = $item;
-        }
-        $current_schema = isset($raw_data['schema']) ? $raw_data['schema'] : array(
-          'item_fields' => array('id', 'category', 'title', 'severity', 'description')
-        );
-      } else {
-        $current_features = $raw_data;
-      }
-
-      if (empty($schema) && !empty($current_schema)) $schema = $current_schema;
-
-      foreach ($current_features as &$feature) {
-        $label = isset($feature['name']) ? $feature['name'] : (isset($feature['title']) ? $feature['title'] : (isset($feature['label']) ? $feature['label'] : __('Unnamed Feature', 'vaptsecure')));
-        $feature['label'] = $label;
-
-        // Hyper-Personalization: Attach source-specific root nodes to each feature (v3.13.1)
-        $feature['root_design_prompt'] = isset($raw_data['design_prompt']) ? $raw_data['design_prompt'] : null;
-        $feature['root_ai_agent_instructions'] = isset($raw_data['ai_agent_instructions']) ? $raw_data['ai_agent_instructions'] : null;
-        $feature['root_global_settings'] = isset($raw_data['global_settings']) ? $raw_data['global_settings'] : null;
-        // The source_file is already set below, but for consistency with the risk_catalog block, we can add it here too.
-        // However, the existing line `feature['source_file'] = $file;` is sufficient.
-
-        $key = isset($feature['id']) ? $feature['id'] : (isset($feature['key']) ? $feature['key'] : sanitize_title($label));
-        $feature['key'] = $key;
-
-        $dedupe_key = strtolower(trim($label));
-
-        if (isset($merged_features[$dedupe_key])) {
-          $merged_features[$dedupe_key]['exists_in_multiple_files'] = true;
-          continue;
-        }
-
-        $st = isset($status_map[$key]) ? $status_map[$key] : array('status' => 'Draft', 'implemented_at' => null, 'assigned_to' => null);
-        $norm_status = strtolower($st['status']);
-        if ($norm_status === 'implemented') $norm_status = 'release';
-        if ($norm_status === 'in_progress') $norm_status = 'develop';
-        if ($norm_status === 'testing')     $norm_status = 'test';
-        if ($norm_status === 'available')   $norm_status = 'draft';
-        $feature['normalized_status'] = $norm_status;
-        $feature['status'] = ucfirst($norm_status);
-        $feature['implemented_at'] = $st['implemented_at'];
-        $feature['assigned_to'] = $st['assigned_to'];
-        $feature['has_history'] = isset($history_counts[$key]) && $history_counts[$key]->count > 0;
-        $feature['source_file'] = $file;
-        $feature['exists_in_multiple_files'] = false;
-
-        $meta = VAPTSECURE_DB::get_feature_meta($key);
-        if ($meta) {
-          $feature['include_test_method'] = (bool) $meta['include_test_method'];
-          $feature['include_verification'] = (bool) $meta['include_verification'];
-          $feature['include_verification_engine'] = isset($meta['include_verification_engine']) ? (bool) $meta['include_verification_engine'] : false;
-          $feature['include_verification_guidance'] = isset($meta['include_verification_guidance']) ? (bool) $meta['include_verification_guidance'] : true;
-          $feature['is_enforced'] = (bool) $meta['is_enforced'];
-          $feature['is_adaptive_deployment'] = isset($meta['is_adaptive_deployment']) ? (bool) $meta['is_adaptive_deployment'] : false;
-          $feature['wireframe_url'] = $meta['wireframe_url'];
-          $feature['dev_instruct'] = isset($meta['dev_instruct']) ? $meta['dev_instruct'] : '';
-
-          $schema_data = array();
-          $use_override_schema = in_array($norm_status, ['test', 'release']) && !empty($meta['override_schema']);
-          $source_schema_json = $use_override_schema ? $meta['override_schema'] : $meta['generated_schema'];
-          if (!empty($source_schema_json)) {
-            $decoded = json_decode($source_schema_json, true);
-            if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
-              $schema_data = $decoded;
-              // [v3.12.17] Translate URL placeholders when returning schema to UI
-              $schema_data = self::translate_url_placeholders($schema_data);
-              if ($use_override_schema) $feature['is_overridden'] = true;
+            if (!empty($meta['operational_notes_content'])) {
+              $feature['operational_notes'] = $meta['operational_notes_content'];
             }
+            $feature['is_enabled'] = isset($meta['is_enabled']) ? (bool)$meta['is_enabled'] : false;
+            $feature['is_enforced'] = isset($meta['is_enforced']) ? (bool)$meta['is_enforced'] : false;
           }
-          $feature['generated_schema'] = $schema_data;
-          $source_impl_json = (in_array($norm_status, ['test', 'release']) && !empty($meta['override_implementation_data'])) ? $meta['override_implementation_data'] : $meta['implementation_data'];
-          $feature['implementation_data'] = $source_impl_json ? json_decode($source_impl_json, true) : array();
 
-          // [v3.12.17] Include manual_protocol and operational_notes in response
-          if (!empty($meta['manual_protocol_content'])) {
-            $feature['manual_protocol'] = $meta['manual_protocol_content'];
+          $merged_features[$dedupe_key] = $feature;
+        }
+      }
+
+      $features = array_values($merged_features);
+
+      if (empty($schema)) $schema = array('item_fields' => array('id', 'category', 'title', 'severity', 'description'));
+
+      if ($scope === 'client') {
+        $domain = $request->get_param('domain');
+        $enabled_features = [];
+        if ($domain) {
+          $dom_row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$wpdb->prefix}vaptsecure_domains WHERE domain = %s", $domain));
+          if (!$dom_row && strpos($domain, '.') !== false) {
+            $domain_base = explode('.', $domain)[0];
+            $dom_row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$wpdb->prefix}vaptsecure_domains WHERE domain = %s", $domain_base));
           }
-          if (!empty($meta['operational_notes_content'])) {
-            $feature['operational_notes'] = $meta['operational_notes_content'];
+          if ($dom_row) {
+            $feat_rows = $wpdb->get_results($wpdb->prepare("SELECT feature_key FROM {$wpdb->prefix}vaptsecure_domain_features WHERE domain_id = %d AND enabled = 1", $dom_row->id), ARRAY_N);
+            $enabled_features = array_column($feat_rows, 0);
           }
-          $feature['is_enabled'] = isset($meta['is_enabled']) ? (bool)$meta['is_enabled'] : false;
-          $feature['is_enforced'] = isset($meta['is_enforced']) ? (bool)$meta['is_enforced'] : false;
         }
-
-        $merged_features[$dedupe_key] = $feature;
+        $features = array_filter($features, function ($f) use ($enabled_features, $is_superadmin) {
+          $s = $f['normalized_status'];
+          if ($s === 'release') return in_array($f['key'], $enabled_features);
+          return $is_superadmin && in_array($s, ['draft', 'develop', 'test']);
+        });
+        $features = array_values($features);
       }
-    }
 
-    $features = array_values($merged_features);
-
-    if (empty($schema)) $schema = array('item_fields' => array('id', 'category', 'title', 'severity', 'description'));
-
-    if ($scope === 'client') {
-      $domain = $request->get_param('domain');
-      $enabled_features = [];
-      if ($domain) {
-        $dom_row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$wpdb->prefix}vaptsecure_domains WHERE domain = %s", $domain));
-        if (!$dom_row && strpos($domain, '.') !== false) {
-          $domain_base = explode('.', $domain)[0];
-          $dom_row = $wpdb->get_row($wpdb->prepare("SELECT id FROM {$wpdb->prefix}vaptsecure_domains WHERE domain = %s", $domain_base));
-        }
-        if ($dom_row) {
-          $feat_rows = $wpdb->get_results($wpdb->prepare("SELECT feature_key FROM {$wpdb->prefix}vaptsecure_domain_features WHERE domain_id = %d AND enabled = 1", $dom_row->id), ARRAY_N);
-          $enabled_features = array_column($feat_rows, 0);
+      // 🛡️ v1.1 FALLBACK: Ensure AI Agent Instructions and Global Settings are loaded (v3.13.8)
+      if (!$ai_agent_instructions && defined('VAPTSECURE_AI_INSTRUCTIONS')) {
+        $instr_path = VAPTSECURE_PATH . 'data/' . VAPTSECURE_AI_INSTRUCTIONS;
+        if (file_exists($instr_path)) {
+          $instr_data = json_decode(file_get_contents($instr_path), true);
+          if (isset($instr_data['ai_agent_instructions'])) {
+            $ai_agent_instructions = $instr_data['ai_agent_instructions'];
+          }
         }
       }
-      $features = array_filter($features, function ($f) use ($enabled_features, $is_superadmin) {
-        $s = $f['normalized_status'];
-        if ($s === 'release') return in_array($f['key'], $enabled_features);
-        return $is_superadmin && in_array($s, ['draft', 'develop', 'test']);
-      });
-      $features = array_values($features);
-    }
 
-    // 🛡️ v1.1 FALLBACK: Ensure AI Agent Instructions and Global Settings are loaded (v3.13.8)
-    if (!$ai_agent_instructions && defined('VAPTSECURE_AI_INSTRUCTIONS')) {
-      $instr_path = VAPTSECURE_PATH . 'data/' . VAPTSECURE_AI_INSTRUCTIONS;
-      if (file_exists($instr_path)) {
-        $instr_data = json_decode(file_get_contents($instr_path), true);
-        if (isset($instr_data['ai_agent_instructions'])) {
-          $ai_agent_instructions = $instr_data['ai_agent_instructions'];
+      if (!$global_settings) {
+        // Try to find global_ui_config in the same file as instructions or active file
+        if (isset($instr_data['global_ui_config'])) {
+          $global_settings = $instr_data['global_ui_config'];
         }
       }
-    }
 
-    if (!$global_settings) {
-      // Try to find global_ui_config in the same file as instructions or active file
-      if (isset($instr_data['global_ui_config'])) {
-        $global_settings = $instr_data['global_ui_config'];
+      $response_data = array(
+        'features' => $features,
+        'schema' => $schema,
+        'design_prompt' => $design_prompt,
+        'ai_agent_instructions' => $ai_agent_instructions,
+        'global_settings' => $global_settings
+      );
+      if ($is_superadmin) {
+        $response_data['active_catalog'] = $requested_file;
+        $response_data['total_features'] = count($features);
       }
+      return new WP_REST_Response($response_data, 200);
+    } catch (\Throwable $e) {
+      error_log('[VAPT REST Error] get_features: ' . $e->getMessage() . ' in ' . $e->getFile() . ':' . $e->getLine());
+      return new WP_REST_Response(['error' => $e->getMessage()], 500);
     }
-
-    $response_data = array(
-      'features' => $features,
-      'schema' => $schema,
-      'design_prompt' => $design_prompt,
-      'ai_agent_instructions' => $ai_agent_instructions,
-      'global_settings' => $global_settings
-    );
-    if ($is_superadmin) {
-      $response_data['active_catalog'] = $requested_file;
-      $response_data['total_features'] = count($features);
-    }
-    return new WP_REST_Response($response_data, 200);
   }
 
   public function get_data_files()
