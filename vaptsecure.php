@@ -3,7 +3,7 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           2.3.1
+ * Version:           2.4.0
  * Author:            Tanveer Malik
  * Author URI:        https://vapt.copilot.com
  * License:           GPL-2.0+
@@ -50,7 +50,7 @@ if (false) {
  * Define Paths & Constants
  */
 if (!defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '2.3.1');
+  define('VAPTSECURE_VERSION', '2.4.0');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
@@ -137,6 +137,10 @@ function is_vaptsecure_superadmin()
     return true;
   }
   */
+
+  if (class_exists('VAPTSECURE_Auth') && VAPTSECURE_Auth::is_authenticated()) {
+    return true;
+  }
 
   return false;
 }
@@ -585,18 +589,19 @@ if (! function_exists('vaptsecure_add_admin_menu')) {
         'vaptsecure-workbench',
         'vaptsecure_render_workbench_page'
       );
-      // Sub-menu 2: Domain Admin
-      add_submenu_page(
-        'vaptsecure',
-        __('VAPTSecure Domain Admin', 'vaptsecure'),
-        __('VAPTSecure Domain Admin', 'vaptsecure'),
-        'manage_options',
-        'vaptsecure-domain-admin',
-        'vaptsecure_render_admin_page'
-      );
-      // Remove the default submenu item created by WordPress
-      remove_submenu_page('vaptsecure', 'vaptsecure');
     }
+
+    // Sub-menu 2: Domain Admin (Allowed for all admins, OTP protected)
+    add_submenu_page(
+      'vaptsecure',
+      __('VAPTSecure Domain Admin', 'vaptsecure'),
+      __('VAPTSecure Domain Admin', 'vaptsecure'),
+      'manage_options',
+      'vaptsecure-domain-admin',
+      'vaptsecure_render_admin_page'
+    );
+    // Remove the default submenu item created by WordPress
+    remove_submenu_page('vaptsecure', 'vaptsecure');
   }
 }
 
@@ -667,7 +672,6 @@ if (! function_exists('vaptsecure_render_workbench_page')) {
 if (! function_exists('vaptsecure_render_admin_page')) {
   function vaptsecure_render_admin_page()
   {
-    vaptsecure_check_permissions();
     vaptsecure_master_dashboard_page();
   }
 }
