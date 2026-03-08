@@ -532,13 +532,14 @@
           isSecure = false;
           message = `Discrepancy: Feature '${featureKey}' is DISABLED in UI, but server is still ENFORCING it ('${vaptEnforced}').`;
         } else {
-          isSecure = (code === 200); // Vulnerable = SUCCESS (Intentional)
-          message = isSecure
+          isSecure = true; // Not actively enforced by this feature = SUCCESS (Intentional)
+          message = (code === 200)
             ? `Status: Protection Disabled (Intentional). Site responds normally (HTTP 200).`
-            : `Status: Protection Disabled (Intentional). Site is blocked (HTTP ${code}) by another system.`;
+            : `Status: Protection Disabled (Intentional). Site is natively blocked (HTTP ${code}).`;
         }
       } else if (hasHeaderCheck) {
-        isSecure = headerMatches && (code === 200 || expectsAllow || statusMatches);
+        // 🛡️ Adaptive Block Support: Allow common block codes if the correct VAPT headers are verified
+        isSecure = headerMatches && (code === 200 || expectsAllow || statusMatches || [400, 401, 403, 404, 429].includes(code));
       } else if (expectsBlock) {
         // Allow 404 and 400 as valid "Blocks" (Global Security Best Practice & REST API Protection)
         const is404Acceptable = code === 404;
