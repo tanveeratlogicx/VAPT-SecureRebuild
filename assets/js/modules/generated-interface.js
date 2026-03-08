@@ -3,7 +3,7 @@
 // Expects props: { feature, onUpdate }
 
 (function () {
-  const { createElement: el, useState, useEffect, useRef } = wp.element;
+  const { createElement: el, useState, useEffect, useRef, useMemo } = wp.element;
   const { Button, TextControl, ToggleControl, SelectControl, TextareaControl, Modal, Icon, Tooltip } = wp.components;
   const { __, sprintf } = wp.i18n;
 
