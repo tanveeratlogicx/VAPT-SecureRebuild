@@ -187,7 +187,14 @@ class VAPTSECURE_Htaccess_Driver
     $log = "[Htaccess Batch Write " . date('Y-m-d H:i:s') . "] Writing " . count($all_rules_array) . " rules.\n";
 
     $htaccess_path = ABSPATH . '.htaccess';
-    if ($target_key === 'uploads') {
+    if ($target_key === 'root') {
+      // [FIX v3.13.23] Use get_home_path if available for accurate Apache root detection
+      if (function_exists('get_home_path')) {
+        $htaccess_path = get_home_path() . '.htaccess';
+      } else {
+        $htaccess_path = ABSPATH . '.htaccess';
+      }
+    } elseif ($target_key === 'uploads') {
       $upload_dir = wp_upload_dir();
       $htaccess_path = $upload_dir['basedir'] . '/.htaccess';
     }
@@ -270,8 +277,13 @@ class VAPTSECURE_Htaccess_Driver
     $new_content = trim($new_content);
 
     // [v3.13.16] Restore WP block if it was lost during stripping (likely due to nested markers)
-    if ($had_wp_block && strpos($new_content, "# BEGIN WordPress") === false && $target_key === 'root') {
-      error_log("VAPT: detected accidental removal of WordPress block during .htaccess strip. Restoring default directives.");
+    // [ENHANCEMENT v3.13.23] Proactive Self-Healing: Always restore if missing from root .htaccess to prevent 403s
+    if ($target_key === 'root' && strpos($new_content, "# BEGIN WordPress") === false) {
+      if ($had_wp_block) {
+        error_log("VAPT: detected accidental removal of WordPress block during .htaccess strip. Restoring.");
+      } else {
+        error_log("VAPT: WordPress block missing from root .htaccess. Proactively restoring to prevent 403 Forbidden errors.");
+      }
       $wp_default = "\n# BEGIN WordPress\n# The directives (lines) between \"BEGIN WordPress\" and \"END WordPress\" are\n# dynamically generated, and should only be modified via WordPress filters.\n# Any changes to the directives between these markers will be overwritten.\n<IfModule mod_rewrite.c>\nRewriteEngine On\nRewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]\nRewriteBase /\nRewriteRule ^index\.php$ - [L]\nRewriteCond %{REQUEST_FILENAME} !-f\nRewriteCond %{REQUEST_FILENAME} !-d\nRewriteRule . /index.php [L]\n</IfModule>\n# END WordPress\n";
       $new_content .= $wp_default;
     }

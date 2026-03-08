@@ -3,7 +3,7 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           2.2.9
+ * Version:           2.3.1
  * Author:            Tanveer Malik
  * Author URI:        https://vapt.copilot.com
  * License:           GPL-2.0+
@@ -50,7 +50,7 @@ if (false) {
  * Define Paths & Constants
  */
 if (!defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '2.2.9');
+  define('VAPTSECURE_VERSION', '2.3.1');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
@@ -716,6 +716,10 @@ function vaptsecure_enqueue_admin_assets($hook)
   wp_enqueue_style('vapt-admin-css', VAPTSECURE_URL . 'assets/css/admin.css', array('wp-components'), VAPTSECURE_VERSION);
   // 1. Superadmin Dashboard (admin.js)
   if ($screen->id === 'toplevel_page_vaptsecure-domain-admin' || $screen->id === 'vaptsecure_page_vaptsecure-domain-admin' || strpos($screen->id, 'vaptsecure-domain-admin') !== false) {
+    if (!VAPTSECURE_Auth::is_authenticated()) {
+      return; // Do not enqueue heavy React apps if OTP is pending
+    }
+
     error_log('VAPT Admin Assets Enqueued for: ' . $screen->id);
     // Enqueue Auto-Interface Generator (Module)
     wp_enqueue_script(
@@ -770,7 +774,11 @@ function vaptsecure_enqueue_admin_assets($hook)
       if (typeof wp === 'undefined' || !wp.apiFetch) return;
       if (wp.apiFetch.__vaptsecure_patched) return;
       
-      let localBroken = localStorage.getItem('vaptsecure_rest_broken') === '1';
+      try {
+        // 🛡️ RECOVERY: If the browser was permanently stuck in silent mode, free it (v2.2.9 Fix)
+        localStorage.removeItem('vaptsecure_rest_broken');
+      } catch (e) { }
+
       const originalApiFetch = wp.apiFetch;
 
       const patchedApiFetch = (args) => {
@@ -805,15 +813,9 @@ function vaptsecure_enqueue_admin_assets($hook)
           return cleanHome + '/?rest_route=/' + cleanPath + queryParams + nonceParam;
         };
 
-        // 🛡️ INSTANT Pre-emptive Fallback if we already know REST is broken
-        if (localBroken && (args.path || args.url) && home) {
-          const fallbackUrl = getFallbackUrl(args.path || args.url);
-          if (fallbackUrl) {
-            const fallbackArgs = Object.assign({}, args, { url: fallbackUrl });
-            delete fallbackArgs.path;
-            return originalApiFetch(fallbackArgs);
-          }
-        }
+        // 🛡️ REMOVED THE INSTANT FALLBACK LOGIC to prevent permanently spamming 403s
+        // on all endpoints when only one endpoint was broken.
+        // Fallbacks will only occur per-request dynamically.
 
         return originalApiFetch(args).catch(err => {
           const status = err.status || (err.data && err.data.status);
@@ -823,15 +825,13 @@ function vaptsecure_enqueue_admin_assets($hook)
             const fallbackUrl = getFallbackUrl(args.path || args.url);
             if (!fallbackUrl) throw err;
 
-            // 🛡️ Switch to Silent Mode closure-wide and storage-wide
-            if (!localBroken) {
-              console.warn('VAPT Secure: Switching to Pre-emptive Mode (Silent) for REST API.');
-              localBroken = true;
-              localStorage.setItem('vaptsecure_rest_broken', '1');
-            }
+            // Notice: We are trying fallback dynamically, but NOT saving it to localStorage
+            console.warn('VAPT Secure: Original API request failed, attempting fallback (?rest_route=...).');
             
             const fallbackArgs = Object.assign({}, args, { url: fallbackUrl });
             delete fallbackArgs.path;
+            
+            // Note: If the fallback also fails, the promise will reject normally back to the caller
             return originalApiFetch(fallbackArgs);
           }
           throw err;

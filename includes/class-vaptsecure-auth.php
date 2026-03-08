@@ -190,25 +190,34 @@ class VAPTSECURE_Auth
         color: #fff;
       }
     </style>
-    <div class="vapt-otp-overlay">
-      <div class="vapt-otp-box">
-        <div style="font-size: 40px; margin-bottom: 20px;">🛡️</div>
-        <h2><?php _e('Identity Verification', 'vaptsecure'); ?></h2>
-        <p><?php _e('Enter the 6-digit code sent to your Email.', 'vaptsecure'); ?></p>
-        <form method="POST" action="">
-          <?php wp_nonce_field('vaptsecure_verify_otp', 'vaptsecure_otp_nonce'); ?>
-          <input type="text" name="vaptsecure_email_otp" class="vapt-otp-input" placeholder="000000" maxlength="6" autofocus required autocomplete="one-time-code" />
-          <button type="submit" name="vaptsecure_otp_submit" class="vapt-otp-submit"><?php _e('Verify & Access', 'vaptsecure'); ?></button>
-        </form>
-        <?php
-        if (isset($_POST['vaptsecure_otp_submit'])) {
-          echo '<div class="vapt-otp-error">' . __('Invalid or expired code. Please try again.', 'vaptsecure') . '</div>';
-        }
-        if (isset($_GET['resend_otp'])) {
-          echo '<div style="margin-top:10px; color:#00e676;">' . __('A new code has been sent!', 'vaptsecure') . '</div>';
-        }
-        ?>
-        <a href="<?php echo esc_url(add_query_arg('resend_otp', '1')); ?>" class="vapt-resend"><?php _e('Didn\'t receive the code? Resend', 'vaptsecure'); ?></a>
+    <!-- Wrapper to stabilize auto-fill and core UI rendering -->
+    <div id="wpwrap">
+      <div id="wpcontent">
+        <div id="wpbody">
+          <div id="wpbody-content">
+            <div class="vapt-otp-overlay">
+              <div class="vapt-otp-box">
+                <div style="font-size: 40px; margin-bottom: 20px;">🛡️</div>
+                <h2><?php _e('Identity Verification', 'vaptsecure'); ?></h2>
+                <p><?php _e('Enter the 6-digit code sent to your Email.', 'vaptsecure'); ?></p>
+                <form method="POST" action="" autocomplete="off">
+                  <?php wp_nonce_field('vaptsecure_verify_otp', 'vaptsecure_otp_nonce'); ?>
+                  <input type="text" name="vaptsecure_email_otp" class="vapt-otp-input" placeholder="000000" maxlength="6" autofocus required autocomplete="one-time-code" />
+                  <button type="submit" name="vaptsecure_otp_submit" class="vapt-otp-submit"><?php _e('Verify & Access', 'vaptsecure'); ?></button>
+                </form>
+                <?php
+                if (isset($_POST['vaptsecure_otp_submit'])) {
+                  echo '<div class="vapt-otp-error">' . __('Invalid or expired code. Please try again.', 'vaptsecure') . '</div>';
+                }
+                if (isset($_GET['resend_otp'])) {
+                  echo '<div style="margin-top:10px; color:#00e676;">' . __('A new code has been sent!', 'vaptsecure') . '</div>';
+                }
+                ?>
+                <a href="<?php echo esc_url(add_query_arg('resend_otp', '1')); ?>" class="vapt-resend"><?php _e('Didn\'t receive the code? Resend', 'vaptsecure'); ?></a>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 <?php

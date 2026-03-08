@@ -5659,7 +5659,7 @@ window.vaptScriptLoaded = true;
   const init = () => {
     const container = document.getElementById('vapt-admin-root');
     if (!container) {
-      console.warn('VAPT Secure: Root container #vapt-admin-root not found.');
+      console.debug('VAPT Secure: Root container #vapt-admin-root not found.');
       return;
     }
 

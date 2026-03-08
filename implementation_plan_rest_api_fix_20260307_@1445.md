@@ -1,48 +1,38 @@
-# Resolve REST API 403 Forbidden Error - FRESH PLAN 20260307_@1505
+# Resolve REST API 403 Forbidden Error - REVISION 1 20260307_@1545
 
-Latest Status: Corrected environment assumptions and versioning. Targeted folder: `VAPT-Secure`.
+Latest Status: **CRITICAL BUG FOUND**. The plugin's `.htaccess` driver wipes the root file if Global Enforcement is OFF, deleting WordPress routing rules.
 
 ## Revision History
 
-### [20260307_@1505] - Corrected Context
+### [20260307_@1545] - The "Self-Wiping" Bug Fix
 
-- **Correction**: Local (Flywheel) is also using Apache.
-- **Correction**: Plugin version is `2.2.8`, NOT `3.13.x`. Targeting `2.2.9`.
-- **Insight**: Missing `.htaccess` on Production Apache breaks REST routing regardless of `RISK-003`.
-
-### [20260307_@1500] - "Missing .htaccess" Theory
-
-- **Discovery**: On Apache, missing `.htaccess` leads to 403 on `/wp-json/`.
+- **Discovery**: `write_batch` writes an empty file if no features are enforced (e.g. Global OFF), which deletes the `# BEGIN WordPress` block.
+- **Fix**: Added a mandatory safeguard to `write_batch` to ensure the WordPress core block is always preserved/restored for the site root.
+- **Path Correction**: Switched to `get_home_path()` for better Apache site root detection.
 
 ---
 
 ## User Review Required
 
 > [!IMPORTANT]
-> I am working in: `t:\~\Local925 Sites\hermasnet\app\public\wp-content\plugins\VAPT-Secure`.
-> I will bump the version to **2.2.9** in `vaptsecure.php`.
-> (The `3.13.x` references I made earlier were mistakenly pulled from internal module comments).
+> This explains why you are seeing 403s: the plugin accidentally deleted your WordPress Permalink rules when you activated it or saved a setting while Global Protection was OFF.
+> My fix will **automatically restore** these rules.
 
 ## Proposed Changes
 
 ### [VAPT-Secure Pattern Library]
 
-#### [MODIFY] [enforcer_pattern_library_v2.0.json](file:///t:/~/Local925%20Sites/hermasnet/app/public/wp-content/plugins/VAPT-Secure/data/enforcer_pattern_library_v2.0.json)
-
-- Update `RISK-003` `htaccess` code to explicitly allow `/users/me`.
+- Update `RISK-003` to allow `/users/me`.
 
 ### [VAPT-Secure Enforcers]
 
-#### [MODIFY] [class-vaptsecure-htaccess-driver.php](file:///t:/~/Local925%20Sites/hermasnet/app/public/wp-content/plugins/VAPT-Secure/includes/enforcers/class-vaptsecure-htaccess-driver.php)
-
-- Improve `write_batch` logging to diagnose Production write failures.
+- **Safeguard**: Rewrite `write_batch` in `class-vaptsecure-htaccess-driver.php` to prevent destructive empty writes.
+- **Self-Healing**: Automatically insert/restore the standard WordPress block if missing.
 
 ### [Plugin Maintenance]
 
-- Bump version to `2.2.9` in `vaptsecure.php`.
+- Bump version to `2.2.9`.
 
 ## Verification Plan
 
-### Manual
-
-- User to verify `.htaccess` creation and REST API access on Production.
+- User to re-save any feature on Production; verify that the `.htaccess` is restored and 403s disappear.

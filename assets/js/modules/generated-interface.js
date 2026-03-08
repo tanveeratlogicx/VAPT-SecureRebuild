@@ -860,6 +860,7 @@
     const [stats, setStats] = useState(null);
     const [loading, setLoading] = useState(false);
     const [resetting, setResetting] = useState(false);
+    const consecutiveFailsRef = useRef(0);
 
     const fetchStats = async () => {
       setLoading(true);
@@ -869,8 +870,10 @@
         });
         const data = await response.json();
         setStats(data);
+        consecutiveFailsRef.current = 0;
       } catch (e) {
         console.error('[VAPT] Failed to fetch stats:', e);
+        consecutiveFailsRef.current++;
       } finally {
         setLoading(false);
       }
@@ -894,7 +897,14 @@
 
     useEffect(() => {
       fetchStats();
-      const interval = setInterval(fetchStats, 10000); // Poll every 10s
+      const interval = setInterval(() => {
+        if (consecutiveFailsRef.current >= 3) {
+          console.warn('VAPT Secure: Background polling stopped due to consecutive network/REST errors.');
+          clearInterval(interval);
+          return;
+        }
+        fetchStats();
+      }, 10000); // Poll every 10s
 
       // Listen for sync events (v3.6.24)
       const handleSync = (e) => {

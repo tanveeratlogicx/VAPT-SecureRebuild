@@ -4,7 +4,7 @@
   console.log('VAPT Secure: client.js loaded');
   if (typeof wp === 'undefined') return;
 
-  const { render, useState, useEffect, useMemo, Fragment, createElement: el } = wp.element || {};
+  const { render, useState, useEffect, useMemo, useRef, Fragment, createElement: el } = wp.element || {};
   const { Button, ToggleControl, Spinner, Notice, Card, CardBody, CardHeader, CardFooter, Icon, Tooltip, Modal } = wp.components || {};
   const settings = window.vaptSecureSettings || {};
   const apiFetch = wp.apiFetch;
@@ -33,6 +33,7 @@
     });
     const [securityLogs, setSecurityLogs] = useState([]);
     const [logsLoading, setLogsLoading] = useState(false);
+    const consecutiveFailsRef = useRef(0);
 
     // Fetch Data
     const fetchData = (refresh = false) => {
@@ -55,10 +56,20 @@
     };
 
     const fetchSecurityInsights = () => {
+      if (consecutiveFailsRef.current >= 3) {
+        return false; // Signal to stop polling
+      }
+
       // Fetch Stats
       apiFetch({ path: 'vaptsecure/v1/security/stats' })
-        .then(data => setSecurityStats(data))
-        .catch(err => console.error('Failed to fetch security stats:', err));
+        .then(data => {
+          setSecurityStats(data);
+          consecutiveFailsRef.current = 0;
+        })
+        .catch(err => {
+          console.error('Failed to fetch security stats:', err);
+          consecutiveFailsRef.current++;
+        });
 
       // Fetch Logs
       setLogsLoading(true);
@@ -70,7 +81,10 @@
         .catch(err => {
           console.error('Failed to fetch security logs:', err);
           setLogsLoading(false);
+          consecutiveFailsRef.current++;
         });
+      
+      return true;
     };
 
     const fetchGlobalSettings = () => {
@@ -85,7 +99,14 @@
       fetchGlobalSettings();
 
       // Real-time Polling: 30 seconds
-      const interval = setInterval(fetchSecurityInsights, 30000);
+      const interval = setInterval(() => {
+        const keepPolling = fetchSecurityInsights();
+        if (!keepPolling) {
+          console.warn('VAPT Secure: Background polling stopped due to consecutive network/REST errors.');
+          clearInterval(interval);
+        }
+      }, 30000);
+      
       return () => clearInterval(interval);
     }, []);
 
