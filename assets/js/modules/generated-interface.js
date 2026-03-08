@@ -1107,8 +1107,9 @@
     const isRateLimit = ['RISK-033', 'RISK-039'].includes(feature.key || feature.id) || !!feature.is_rate_limit;
 
     const handleChange = (key, val) => {
+      const newData = { ...currentData, [key]: val };
       if (typeof onUpdate === 'function') {
-        onUpdate(key, val);
+        onUpdate(newData);
       }
     };
 
