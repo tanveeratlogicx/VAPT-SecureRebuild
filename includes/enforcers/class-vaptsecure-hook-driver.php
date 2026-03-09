@@ -405,6 +405,28 @@ class VAPTSECURE_Hook_Driver
     }
 
     /**
+     * Record an admin-notice-friendly event so the Admin UI can surface alerts.
+     */
+    private static function record_admin_notification($feature_key, $payload = [])
+    {
+        try {
+            $existing = get_transient('vaptsecure_block_events');
+            $events = is_array($existing) ? $existing : [];
+            $events[] = array_merge([
+                'feature' => $feature_key,
+                'time' => current_time('mysql'),
+            ], $payload);
+            // keep only last 10 events
+            if (count($events) > 10) {
+                $events = array_slice($events, -10);
+            }
+            set_transient('vaptsecure_block_events', $events, 300); // show for 5 minutes
+        } catch (Exception $e) {
+            // silent
+        }
+    }
+
+    /**
      * Detect Request Context (Engine Core)
      * Returns: ['is_login', 'is_admin', 'is_api', 'is_frontend']
      */
@@ -664,6 +686,14 @@ class VAPTSECURE_Hook_Driver
                                         "count" => $current,
                                     ],
                                 );
+                                // Admin notification
+                                try {
+                                    self::record_admin_notification($feature_key, [
+                                        'reason' => 'Rate Limit',
+                                        'limit' => $limit,
+                                        'count' => $current,
+                                    ]);
+                                } catch (Exception $e) {}
                                 flock($fp, LOCK_UN);
                                 fclose($fp);
                                 wp_die(
@@ -739,6 +769,7 @@ class VAPTSECURE_Hook_Driver
                         "type" => "Directory Browsing",
                         "uri" => $uri,
                     ]);
+                    try { self::record_admin_notification($key, ['reason' => 'Directory Browsing', 'uri' => $uri]); } catch (Exception $e) {}
                     wp_die("VAPT: Directory Browsing is Blocked for Security.");
                 }
             }
@@ -761,6 +792,7 @@ class VAPTSECURE_Hook_Driver
             VAPTSECURE_DB::log_security_event($key, "Block", [
                 "type" => "XML-RPC",
             ]);
+            try { self::record_admin_notification($key, ['reason' => 'XML-RPC']); } catch (Exception $e) {}
             wp_die("VAPT: XML-RPC Access is Blocked for Security.");
         }
     }
@@ -770,23 +802,35 @@ class VAPTSECURE_Hook_Driver
      */
     private static function block_null_byte_injection($key = "unknown")
     {
-        $query = $_SERVER["QUERY_STRING"] ?? "";
-        if (
-            strpos($query, "%00") !== false ||
-            strpos(urldecode($query), "\0") !== false
-        ) {
-            status_header(403);
-            header("X-VAPT-Enforced: php-null-byte");
-            header("X-VAPT-Feature: " . $key);
-            header(
-                "Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature",
-            );
-            VAPTSECURE_DB::log_security_event($key, "Block", [
-                "type" => "Null Byte Injection",
-                "query" => $query,
-            ]);
-            wp_die("VAPT: Null Byte Injection Attempt Blocked.");
-        }
+        // Run early on 'init' so that web requests are inspected before heavy processing
+        add_action('init', function () use ($key) {
+            $query = $_SERVER['QUERY_STRING'] ?? '';
+            $uri = $_SERVER['REQUEST_URI'] ?? '';
+
+            // Check common encodings and raw input
+            $raw_input = @file_get_contents('php://input') ?: '';
+            $decoded_query = @urldecode($query);
+
+            $has_null = false;
+            if (strpos($query, '%00') !== false) $has_null = true;
+            if (strpos($decoded_query, "\0") !== false) $has_null = true;
+            if (strpos($uri, '%00') !== false) $has_null = true;
+            if (strpos($raw_input, "\0") !== false) $has_null = true;
+
+            if ($has_null) {
+                status_header(403);
+                header('X-VAPT-Enforced: php-null-byte');
+                header('X-VAPT-Feature: ' . $key);
+                header('Access-Control-Expose-Headers: X-VAPT-Enforced, X-VAPT-Feature');
+                VAPTSECURE_DB::log_security_event($key, 'Block', [
+                    'type' => 'Null Byte Injection',
+                    'query' => $query,
+                    'uri' => $uri,
+                ]);
+                try { self::record_admin_notification($key, ['reason' => 'Null Byte Injection', 'query' => $query, 'uri' => $uri]); } catch (Exception $e) {}
+                wp_die('VAPT: Null Byte Injection Attempt Blocked.');
+            }
+        }, 1);
     }
 
     /**
@@ -863,6 +907,7 @@ class VAPTSECURE_Hook_Driver
                     "type" => "Debug Log Exposure",
                     "uri" => $uri,
                 ]);
+                try { self::record_admin_notification($key, ['reason' => 'Debug Log Exposure', 'uri' => $uri]); } catch (Exception $e) {}
                 wp_die("VAPT: Access to debug.log is Blocked for Security.");
             }
         });
@@ -1032,6 +1077,7 @@ class VAPTSECURE_Hook_Driver
                         "type" => "Sensitive File Access",
                         "file" => $file,
                     ]);
+                    try { self::record_admin_notification($key, ['reason' => 'Sensitive File Access', 'file' => $file]); } catch (Exception $e) {}
                     wp_die(
                         "VAPT: Access to this file is Blocked for Security.",
                     );
@@ -1077,6 +1123,7 @@ class VAPTSECURE_Hook_Driver
                     VAPTSECURE_DB::log_security_event($key, "Block", [
                         "type" => "WP-Cron Access",
                     ]);
+                    try { self::record_admin_notification($key, ['reason' => 'WP-Cron Access']); } catch (Exception $e) {}
                     wp_die("VAPT: WP-Cron is Blocked for Security.");
                 }
             },
@@ -1094,9 +1141,90 @@ class VAPTSECURE_Hook_Driver
             return; // Skip if global protection is disabled
         }
 
-        // Note: REST API security is handled by individual endpoint permission_callbacks
-        // We don't block at the authentication level to avoid breaking core functionality
-        // Each endpoint should use 'permission_callback' => [$this, 'check_permission']
-        // to properly verify capabilities (e.g., manage_options for admin endpoints)
+        // Add lightweight filters for REST requests to block clearly malicious payloads
+        // while avoiding broad blocking that would break legitimate endpoints.
+
+        // 1) Block requests with null-bytes in the URI/query/body (defensive)
+        add_filter('rest_authentication_errors', function ($result) use ($key) {
+            if (!empty($result)) {
+                return $result;
+            }
+
+            $uri = $_SERVER['REQUEST_URI'] ?? '';
+            if (strpos($uri, '/wp-json') === false) {
+                return $result; // Not a REST request
+            }
+
+            $query = $_SERVER['QUERY_STRING'] ?? '';
+            $raw_input = @file_get_contents('php://input') ?: '';
+
+            if (strpos($uri, '%00') !== false || strpos(urldecode($query), "\0") !== false || strpos($raw_input, "\0") !== false) {
+                return new WP_Error('rest_forbidden', 'Malformed request (null byte detected).', array('status' => 400));
+            }
+
+            // 2) Lightweight SQLi fingerprinting for REST: only block if obvious patterns
+            // and ensure we do not block legitimate WP admin or REST operations.
+            $sqli_pattern = '/\b(concat|union\s+select|select\s+\*|insert\s+into|delete\s+from|update\s+\w+)/i';
+            $route_check = isset($_GET['rest_route']) ? $_GET['rest_route'] : '';
+
+            // Allow explicit WP admin and standard REST routes (whitelist)
+            $whitelist_uri_patterns = [
+                '#^/wp-json#i',
+                '#^/wp-admin#i',
+                '#/wp-login.php#i',
+                '#/admin-ajax.php#i',
+                '#/admin-post.php#i',
+                '#/wp-cron.php#i',
+                '#/xmlrpc.php#i',
+            ];
+
+            $whitelist_route_substrings = [
+                'wp/v2',
+                'vaptsecure/v1',
+                'oembed',
+            ];
+
+            foreach ($whitelist_uri_patterns as $pat) {
+                if (preg_match($pat, $uri)) {
+                    return $result; // Trusted admin or core REST route — skip aggressive checks
+                }
+            }
+
+            if ($route_check) {
+                foreach ($whitelist_route_substrings as $sub) {
+                    if (stripos($route_check, $sub) !== false) {
+                        return $result;
+                    }
+                }
+            }
+
+            // Inspect query and body for SQLi patterns
+            if (preg_match($sqli_pattern, $query) || preg_match($sqli_pattern, $raw_input)) {
+                VAPTSECURE_DB::log_security_event($key, 'Block', [
+                    'type' => 'REST SQL Injection Fingerprint',
+                    'uri' => $uri,
+                    'query' => $query,
+                ]);
+                try { self::record_admin_notification($key, ['reason' => 'REST SQLi Fingerprint', 'uri' => $uri, 'query' => $query]); } catch (Exception $e) {}
+                return new WP_Error('rest_forbidden', 'Malicious payload detected.', array('status' => 403));
+            }
+
+            return $result;
+        }, 10);
+
+        // 3) Defensive endpoint hardening: ensure /wp/v2/users/me is only accessible to authenticated users
+        add_filter('rest_authentication_errors', function ($result) {
+            if (!empty($result)) {
+                return $result;
+            }
+            $current_route = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+            if (preg_match('#/wp/v2/users/me($|\?|/)#', $current_route)) {
+                if (!is_user_logged_in() && get_current_user_id() === 0) {
+                    try { self::record_admin_notification('rest-users-me', ['reason' => 'Unauthorized users/me access', 'route' => $current_route]); } catch (Exception $e) {}
+                    return new WP_Error('rest_forbidden', 'Authentication required.', array('status' => 401));
+                }
+            }
+            return $result;
+        }, 20);
     }
 }

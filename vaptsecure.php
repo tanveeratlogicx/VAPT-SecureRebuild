@@ -3,7 +3,7 @@
 /**
  * Plugin Name: VAPT Secure
  * Description: Ultimate VAPT and OWASP Security Plugin Builder.
- * Version:           2.4.7
+ * Version:           2.4.8
  * Author:            Tanveer Malik
  * Author URI:        https://vapt.copilot.com
  * License:           GPL-2.0+
@@ -50,7 +50,7 @@ if (false) {
  * Define Paths & Constants
  */
 if (!defined('VAPTSECURE_VERSION')) {
-  define('VAPTSECURE_VERSION', '2.4.7');
+  define('VAPTSECURE_VERSION', '2.4.8');
 }
 if (! defined('VAPTSECURE_DATA_VERSION')) {
   define('VAPTSECURE_DATA_VERSION', '2.0.0');
@@ -578,7 +578,7 @@ if (! function_exists('vaptsecure_add_admin_menu')) {
       'dashicons-shield',
       80
     );
-    // 2. Sub-menus (Superadmin Only)
+    // Sub-menus (Superadmin Only)
     if ($is_superadmin) {
       // Sub-menu 1: Workbench
       add_submenu_page(
@@ -589,17 +589,17 @@ if (! function_exists('vaptsecure_add_admin_menu')) {
         'vaptsecure-workbench',
         'vaptsecure_render_workbench_page'
       );
-    }
 
-    // Sub-menu 2: Domain Admin (Allowed for all admins, OTP protected)
-    add_submenu_page(
-      'vaptsecure',
-      __('VAPTSecure Domain Admin', 'vaptsecure'),
-      __('VAPTSecure Domain Admin', 'vaptsecure'),
-      'manage_options',
-      'vaptsecure-domain-admin',
-      'vaptsecure_render_admin_page'
-    );
+      // Sub-menu 2: Domain Admin (Superadmin Only)
+      add_submenu_page(
+        'vaptsecure',
+        __('VAPTSecure Domain Admin', 'vaptsecure'),
+        __('VAPTSecure Domain Admin', 'vaptsecure'),
+        'manage_options',
+        'vaptsecure-domain-admin',
+        'vaptsecure_render_admin_page'
+      );
+    }
     // Remove the default submenu item created by WordPress
     remove_submenu_page('vaptsecure', 'vaptsecure');
   }
@@ -654,6 +654,10 @@ if (! function_exists('vaptsecure_render_client_status_page')) {
 if (! function_exists('vaptsecure_render_workbench_page')) {
   function vaptsecure_render_workbench_page()
   {
+    // Strict guard: ensure only the configured superadmin can render this page
+    if (! is_vaptsecure_superadmin()) {
+      wp_die(__('You do not have permission to access the VAPT Secure Workbench.', 'vaptsecure'));
+    }
   ?>
     <div class="wrap">
       <h1 class="wp-heading-inline"><?php _e('VAPT Secure Workbench', 'vaptsecure'); ?></h1>
@@ -679,7 +683,12 @@ if (! function_exists('vaptsecure_render_admin_page')) {
 if (! function_exists('vaptsecure_master_dashboard_page')) {
   function vaptsecure_master_dashboard_page()
   {
-    // Verify Identity
+    // Strict guard: only the configured superadmin may access this page
+    if (! is_vaptsecure_superadmin()) {
+      wp_die(__('You do not have permission to access the VAPT Secure Dashboard.', 'vaptsecure'));
+    }
+
+    // Verify Identity via OTP (additional authentication layer)
     if (! VAPTSECURE_Auth::is_authenticated()) {
       $identity = vaptsecure_get_superadmin_identity();
       if (! get_transient('vaptsecure_otp_email_' . $identity['user'])) {

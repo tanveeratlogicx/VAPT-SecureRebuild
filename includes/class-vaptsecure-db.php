@@ -347,6 +347,16 @@ class VAPTSECURE_DB
   }
 
   /**
+   * Get a single security event by ID
+   */
+  public static function get_security_event($id)
+  {
+    global $wpdb;
+    $table = $wpdb->prefix . 'vaptsecure_security_events';
+    return $wpdb->get_row($wpdb->prepare("SELECT * FROM $table WHERE id = %d", $id), ARRAY_A);
+  }
+
+  /**
    * Get security stats summary
    */
   public static function get_security_stats_summary()

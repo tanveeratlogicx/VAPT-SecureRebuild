@@ -196,12 +196,12 @@
       // Heuristic for rule generation if not present in feature
       if (feature.remediation && feature.remediation.includes('RewriteRule')) return feature.remediation;
       const title = feature.label || feature.title || 'Feature';
-      return `# VAPT Protection: ${title}\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    # Auto-generated protection logic\n    RewriteCond %{QUERY_STRING} (concat|union|select|insert|delete|update) [NC]\n    RewriteRule ^ - [F,L]\n</IfModule>`;
+      return `# VAPT Protection: ${title}\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    # Auto-generated protection logic (skip core WP admin & REST endpoints)\n    RewriteCond %{REQUEST_URI} !^/wp-json [NC]\n    RewriteCond %{REQUEST_URI} !^/wp-admin [NC]\n    RewriteCond %{REQUEST_URI} !/admin-ajax.php [NC]\n    RewriteCond %{REQUEST_URI} !/admin-post.php [NC]\n    RewriteCond %{REQUEST_URI} !^/wp-login.php [NC]\n    RewriteCond %{REQUEST_URI} !/wp-cron.php [NC]\n    RewriteCond %{QUERY_STRING} !(^|&)rest_route= [NC]\n    RewriteCond %{QUERY_STRING} (concat|union|select|insert|delete|update) [NC]\n    RewriteRule ^ - [F,L]\n</IfModule>`;
     },
 
     suggestNginxRules: function (feature) {
       const title = feature.label || feature.title || 'Feature';
-      return `# VAPT Nginx Protection: ${title}\nif ($query_string ~* "(concat|union|select|insert|delete|update)") {\n    return 403;\n}`;
+      return `# VAPT Nginx Protection: ${title}\n# Skip core WP admin & REST endpoints\nif ($request_uri !~* "^/wp-json" && $request_uri !~* "^/wp-admin" && $request_uri !~* "admin-ajax.php" && $request_uri !~* "admin-post.php" && $request_uri !~* "^/wp-login.php" && $request_uri !~* "wp-cron.php") {\n    if ($query_string ~* "(concat|union|select|insert|delete|update)") {\n        return 403;\n    }\n}`;
     },
 
     suggestVerificationTests: function (feature, riskId) {
