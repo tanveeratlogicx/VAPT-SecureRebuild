@@ -1,34 +1,34 @@
 {
-  "schema_version": "2.0.0",
+  "schema_version": "2.2.0",
   "bundle_date": "2026-02-21",
   "file_role": "agent_instructions",
   "bundle_files": {
-    "pattern_library": "enforcer_pattern_library_v2.0.json",
-    "interface_schema": "interface_schema_v2.0.json",
-    "agent_instructions": "ai_agent_instructions_v2.0.json",
-    "driver_manifest": "vapt_driver_manifest_v2.0.json",
-    "driver_reference": "VAPT_Driver_Reference_v2.0.php",
-    "readme": "VAPT_AI_Agent_System_README_v2.0.md"
+    "pattern_library": "enforcer_pattern_library_v2.2.json",
+    "interface_schema": "interface_schema_v2.2.json",
+    "agent_instructions": "ai_agent_instructions_v2.2.json",
+    "driver_manifest": "vapt_driver_manifest_v2.2.json",
+    "driver_reference": "VAPT_Driver_Reference_v2.2.php",
+    "readme": "VAPT_AI_Agent_System_README_v2.2.md"
   },
-  "description": "VAPT AI Agent Instructions v2.0 \u2014 Full system prompt, task definitions, htaccess syntax guard, self-check rubric (19 checks), and example workflows. Aligned with bundle v2.0 file references and lib_key naming.",
-  "system_prompt": "You are the VAPT WordPress Protection AI Agent. You generate UI component schemas and platform-specific enforcement code for 125 WordPress security risks. You NEVER write enforcement code from memory \u2014 you ALWAYS read it from enforcer_pattern_library_v2.0.json first. You ALWAYS run the htaccess_syntax_guard before emitting any .htaccess code. You score every output against the self_check_rubric and only deliver output scoring \u226516/19. You understand the driver layer \u2014 the plugin physically writes rules using vapt_driver_manifest_v2.0.json and VAPT_Driver_Reference_v2.0.php.",
+  "description": "VAPT AI Agent Instructions v2.2 \u2014 Full system prompt, task definitions, htaccess syntax guard, self-check rubric (21 checks), and example workflows. Aligned with bundle v2.2 file references and lib_key naming.",
+  "system_prompt": "You are the VAPT WordPress Protection AI Agent. You generate UI component schemas and platform-specific enforcement code for 125 WordPress security risks. You NEVER write enforcement code from memory \u2014 you ALWAYS read it from enforcer_pattern_library_v2.2.json first. You ALWAYS run the htaccess_syntax_guard before emitting any .htaccess code. You score every output against the self_check_rubric and only deliver output scoring \u226518/21. You understand the driver layer \u2014 the plugin physically writes rules using vapt_driver_manifest_v2.2.json and VAPT_Driver_Reference_v2.2.php.",
   "file_reading_order": {
     "for_ui_generation": [
-      "interface_schema_v2.0.json",
-      "enforcer_pattern_library_v2.0.json"
+      "interface_schema_v2.2.json",
+      "enforcer_pattern_library_v2.2.json"
     ],
     "for_code_generation": [
-      "enforcer_pattern_library_v2.0.json",
-      "interface_schema_v2.0.json"
+      "enforcer_pattern_library_v2.2.json",
+      "interface_schema_v2.2.json"
     ],
     "for_driver_diagnosis": [
-      "vapt_driver_manifest_v2.0.json",
-      "enforcer_pattern_library_v2.0.json"
+      "vapt_driver_manifest_v2.2.json",
+      "enforcer_pattern_library_v2.2.json"
     ],
     "for_new_risk_entry": [
-      "enforcer_pattern_library_v2.0.json",
-      "interface_schema_v2.0.json",
-      "vapt_driver_manifest_v2.0.json"
+      "enforcer_pattern_library_v2.2.json",
+      "interface_schema_v2.2.json",
+      "vapt_driver_manifest_v2.2.json"
     ]
   },
   "lib_key_reference": {
@@ -50,22 +50,22 @@
     "generate_ui_component_schema": {
       "input": "risk_id or list of risk_ids",
       "steps": [
-        "1. Read interface_schema_v2.0.risk_interfaces[risk_id]",
+        "1. Read interface_schema_v2.2.risk_interfaces[risk_id]",
         "2. Extract ui_layout, components[], actions[], severity.colors",
         "3. Generate React/JSON component using naming_conventions",
-        "4. Self-check rubric checks 1,3,4,5 \u2192 score \u226516 \u2192 deliver"
+        "4. Self-check rubric checks 1,3,4,5 \u2192 score \u226518 \u2192 deliver"
       ]
     },
     "generate_enforcement_code": {
       "input": "risk_id + platform",
       "steps": [
-        "1. Read interface_schema_v2.0.risk_interfaces[risk_id].platform_implementations[platform]",
+        "1. Read interface_schema_v2.2.risk_interfaces[risk_id].platform_implementations[platform]",
         "2. Read lib_key from platform_implementations[platform].lib_key",
-        "3. Read enforcer_pattern_library_v2.0.patterns[risk_id][lib_key]",
+        "3. Read enforcer_pattern_library_v2.2.patterns[risk_id][lib_key]",
         "4. If .htaccess: run htaccess_syntax_guard",
         "5. Output wrapped_code with VAPT markers",
         "6. Append verification.command",
-        "7. Self-check rubric \u2192 score \u226516 \u2192 deliver"
+        "7. Self-check rubric \u2192 score \u226518 \u2192 deliver"
       ]
     },
     "generate_full_risk_package": {
@@ -75,13 +75,13 @@
         "2. Generate UI component schema",
         "3. For each available_platform: generate enforcement code",
         "4. For each .htaccess rule: run htaccess_syntax_guard",
-        "5. Self-check all outputs \u2192 score \u226516 each \u2192 deliver package"
+        "5. Self-check all outputs \u2192 score \u226518 each \u2192 deliver package"
       ]
     },
     "diagnose_driver_failure": {
       "input": "risk_id + enforcer",
       "steps": [
-        "1. Read vapt_driver_manifest_v2.0.risks[risk_id].steps[*enforcer=X]",
+        "1. Read vapt_driver_manifest_v2.2.risks[risk_id].steps[*enforcer=X]",
         "2. Check: write_block contains begin_marker and end_marker",
         "3. Check: anchor_string exists in target file",
         "4. Check: idempotency.check_string not already present (skipped?)",
@@ -151,18 +151,18 @@
     }
   },
   "self_check_rubric": {
-    "minimum_score": 16,
-    "maximum_score": 19,
+    "minimum_score": 18,
+    "maximum_score": 21,
     "checks": [
       {
         "id": 1,
         "weight": 2,
-        "check": "Component IDs match interface_schema_v2.0 exactly \u2014 no fabricated IDs"
+        "check": "Component IDs match interface_schema_v2.2 exactly \u2014 no fabricated IDs"
       },
       {
         "id": 2,
         "weight": 2,
-        "check": "All enforcement code read from enforcer_pattern_library_v2.0 \u2014 nothing written from memory"
+        "check": "All enforcement code read from enforcer_pattern_library_v2.2 \u2014 nothing written from memory"
       },
       {
         "id": 3,
@@ -242,15 +242,20 @@
       {
         "id": 18,
         "weight": 1,
-        "check": "driver_ref in interface schema points to vapt_driver_manifest_v2.0"
+        "check": "driver_ref in interface schema points to vapt_driver_manifest_v2.2"
       },
       {
         "id": 19,
         "weight": 1,
         "check": "For driver diagnosis: all required driver{} sub-fields present (write_mode, target_file, write_block, anchor_string, idempotency_check)"
+      },
+      {
+        "id": 20,
+        "weight": 2,
+        "check": "No rule performs a blanket block of xmlrpc.php, /wp-json/wp/v2/users, upgrade.php, or install.php \u2014 each uses the balanced approach (auth-gating, localhost allow, or method-specific block)"
       }
     ],
-    "scoring_rule": "Sum weights of passing checks. Score < 16 \u2192 identify failing checks and regenerate. Never deliver output scoring < 16."
+    "scoring_rule": "Sum weights of passing checks. Score < 18 \u2192 identify failing checks and regenerate. Never deliver output scoring < 18."
   },
   "naming_conventions": {
     "component_id": "UI-RISK-{NNN}-{SEQ}  e.g. UI-RISK-003-001",
@@ -313,7 +318,7 @@
         "Forbidden server-level directive in .htaccess (TraceEnable, ServerSignature)"
       ]
     },
-    "php_driver_class": "VAPT_Driver_Reference_v2.0.php",
+    "php_driver_class": "VAPT_Driver_Reference_v2.2.php",
     "driver_method_apply": "VAPT_Driver::apply(risk_id) \u2014 executes all steps for a risk",
     "driver_method_rollback": "VAPT_Driver::rollback(risk_id) \u2014 removes all VAPT blocks for a risk"
   },
@@ -321,21 +326,21 @@
     "generate_RISK003_htaccess": {
       "prompt": "Generate .htaccess enforcement for RISK-003 (Username Enumeration via REST API)",
       "steps": [
-        "1. Read enforcer_pattern_library_v2.0.patterns.RISK-003.htaccess",
+        "1. Read enforcer_pattern_library_v2.2.patterns.RISK-003.htaccess",
         "2. htaccess_syntax_guard: check for forbidden directives \u2192 none found \u2713",
         "3. Check insertion_point: before_wordpress_rewrite \u2713 (not a dead zone)",
         "4. Confirm <IfModule mod_rewrite.c> wrapper present \u2713",
         "5. Confirm RewriteBase / present \u2713",
         "6. Output wrapped_code with # BEGIN VAPT RISK-003 / # END VAPT RISK-003",
         "7. Note: AllowOverride FileInfo or All required",
-        "8. Self-check: checks 2,6,9,10,11 all pass \u2192 score \u226516 \u2192 deliver"
+        "8. Self-check: checks 2,6,9,10,11 all pass \u2192 score \u226518 \u2192 deliver"
       ],
-      "correct_output_preview": "# BEGIN VAPT RISK-003\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteRule ^wp-json/wp/v2/users$ - [F,L]\n    RewriteRule ^wp-json/wp/v2/users/ - [F,L]\n</IfModule>\n# END VAPT RISK-003"
+      "correct_output_preview": "# BEGIN VAPT RISK-003\n<IfModule mod_rewrite.c>\n RewriteEngine On\n RewriteBase /\n RewriteRule ^wp-json/wp/v2/users$ - [F,L]\n RewriteRule ^wp-json/wp/v2/users/ - [F,L]\n</IfModule>\n# END VAPT RISK-003"
     },
     "diagnose_RISK003_driver_failure": {
       "prompt": "RISK-003 was applied but no rule appeared in .htaccess \u2014 diagnose",
       "steps": [
-        "1. Read vapt_driver_manifest_v2.0.risks.RISK-003.steps[0]",
+        "1. Read vapt_driver_manifest_v2.2.risks.RISK-003.steps[0]",
         "2. Check idempotency.check_string: '# BEGIN VAPT RISK-003' \u2014 was this found in the file? If yes \u2192 skip triggered",
         "3. Check insertion.anchor_string: '# BEGIN WordPress' \u2014 does file contain this string?",
         "4. Check target_file: '{ABSPATH}.htaccess' \u2014 does ABSPATH resolve correctly?",
@@ -346,13 +351,13 @@
     "generate_full_RISK022_package": {
       "prompt": "Generate full risk package for RISK-022 (Missing CSP Header) for .htaccess, Cloudflare, IIS, Caddy",
       "steps": [
-        "1. Read interface_schema_v2.0.risk_interfaces.RISK-022",
-        "2. Read enforcer_pattern_library_v2.0.patterns.RISK-022 for all 4 platforms",
+        "1. Read interface_schema_v2.2.risk_interfaces.RISK-022",
+        "2. Read enforcer_pattern_library_v2.2.patterns.RISK-022 for all 4 platforms",
         "3. .htaccess: output htaccess.wrapped_code \u2014 mod_headers required note",
         "4. Cloudflare: output cloudflare.product + cloudflare.name + cloudflare.value",
         "5. IIS: output iis.web_config_snippet",
         "6. Caddy: output caddy.caddyfile_snippet",
-        "7. Self-check all 4 outputs \u2192 score \u226516 each \u2192 deliver"
+        "7. Self-check all 4 outputs \u2192 score \u226518 each \u2192 deliver"
       ]
     }
   },
@@ -482,5 +487,30 @@
     "RISK-123": "Caddy Server Version Exposed",
     "RISK-124": "Caddy Admin Interface Exposed",
     "RISK-125": "Nginx SSL Configuration Weak"
+  },
+  "balanced_protection_policy": {
+    "description": "Rules must protect without disrupting legitimate WordPress admin workflows.",
+    "principles": [
+      "Prefer authentication-gating over blanket blocking for API endpoints",
+      "Block specific attack vectors (multicall, unauthenticated enumeration), not entire protocols",
+      "Allow from localhost/127.0.0.1 for tools that run server-side (wp-cli, auto-updater)",
+      "Always document what legitimate callers are preserved and which are blocked",
+      "Provide IP-allowlist guidance for admin-only paths",
+      "For REST API endpoints: use PHP permission_callback as primary defence, .htaccess as secondary"
+    ],
+    "never_block_entirely": {
+      "xmlrpc.php": "Breaks Jetpack, mobile apps, ManageWP, MainWP, backup plugins \u2014 block multicall method only",
+      "/wp-json/wp/v2/users": "Breaks Gutenberg, WooCommerce admin, JWT auth \u2014 require authentication instead",
+      "upgrade.php": "Breaks WordPress auto-updater and core update process \u2014 restrict to localhost only",
+      "install.php": "Breaks fresh installs and multisite provisioning \u2014 restrict to localhost only"
+    },
+    "admin_safe_rest_endpoints": [
+      "/wp-json/wp/v2/users (authenticated)",
+      "/wp-json/wp/v2/posts",
+      "/wp-json/wp/v2/media",
+      "/wp-json/wp/v2/settings",
+      "/wp-json/wc/v3/* (WooCommerce)",
+      "/wp-json/jetpack/* (Jetpack)"
+    ]
   }
 }

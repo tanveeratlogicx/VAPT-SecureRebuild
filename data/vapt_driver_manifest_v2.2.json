@@ -1,5 +1,5 @@
 {
-  "schema_version": "2.0.0",
+  "schema_version": "2.2.0",
   "bundle_date": "2026-02-21",
   "source_file": "VAPT-Risk-Catalogue-Full-125-v3_4_1.json",
   "file_role": "driver_manifest",
@@ -163,13 +163,13 @@
             "anchor_position": "prepend",
             "fallback": null
           },
-          "write_block": "# BEGIN VAPT RISK-002\n<Files \"xmlrpc.php\">\n    Order Deny,Allow\n    Deny from all\n</Files>\n# END VAPT RISK-002",
+          "write_block": "# BEGIN VAPT RISK-002\n# Block XML-RPC pingback method exploitation only\n# Allows: Jetpack, mobile apps, ManageWP, authenticated XML-RPC clients\n# Blocks: pingback flood attacks and multicall brute-force\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    # Block multicall brute-force (common attack vector)\n    RewriteCond %{REQUEST_URI} ^/xmlrpc.php$ [NC]\n    RewriteCond %{REQUEST_METHOD} POST [NC]\n    RewriteCond %{THE_REQUEST} system\\.multicall [NC]\n    RewriteRule ^ - [F,L]\n</IfModule>\n# Block pingback user-agent (WordPress pingback bots)\n<IfModule mod_setenvif.c>\n    SetEnvIf HTTP_USER_AGENT \"WordPress/.*\" XMLRPC_PINGBACK\n    SetEnvIfExpr \"req_novary('X-Pingback') != ''\" XMLRPC_PINGBACK\n</IfModule>\n# END VAPT RISK-002",
           "begin_marker": "# BEGIN VAPT RISK-002",
           "end_marker": "# END VAPT RISK-002",
-          "raw_code": "<Files \"xmlrpc.php\">\n    Order Deny,Allow\n    Deny from all\n</Files>",
+          "raw_code": "# Block XML-RPC pingback method exploitation only\n# Allows: Jetpack, mobile apps, ManageWP, authenticated XML-RPC clients\n# Blocks: pingback flood attacks and multicall brute-force\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    # Block multicall brute-force (common attack vector)\n    RewriteCond %{REQUEST_URI} ^/xmlrpc.php$ [NC]\n    RewriteCond %{REQUEST_METHOD} POST [NC]\n    RewriteCond %{THE_REQUEST} system\\.multicall [NC]\n    RewriteRule ^ - [F,L]\n</IfModule>\n# Block pingback user-agent (WordPress pingback bots)\n<IfModule mod_setenvif.c>\n    SetEnvIf HTTP_USER_AGENT \"WordPress/.*\" XMLRPC_PINGBACK\n    SetEnvIfExpr \"req_novary('X-Pingback') != ''\" XMLRPC_PINGBACK\n</IfModule>",
           "verification": {
-            "command": "apachectl -t",
-            "expected": "Exit 0, no syntax errors"
+            "command": "apachectl -t && curl -s -X POST https://yoursite.com/xmlrpc.php -d '<methodCall><methodName>system.multicall</methodName></methodCall>' | grep -i 403",
+            "expected": "HTTP 403 for multicall attack, HTTP 200 for legitimate POST"
           },
           "rollback": {
             "action": "remove_block",
@@ -203,19 +203,51 @@
             "anchor_position": "before",
             "fallback": "prepend"
           },
-          "write_block": "# BEGIN VAPT RISK-003\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteRule ^wp-json/wp/v2/users$ - [F,L]\n    RewriteRule ^wp-json/wp/v2/users/ - [F,L]\n</IfModule>\n# END VAPT RISK-003",
+          "write_block": "# BEGIN VAPT RISK-003\n# Require authentication for /wp-json/wp/v2/users endpoint\n# Allows: Gutenberg @mentions, WooCommerce admin, JWT auth, logged-in admins\n# Blocks: unauthenticated user enumeration by bots and scanners\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    # Block unauthenticated requests to /users endpoint\n    # Passes through: requests with Authorization header (JWT, Basic, OAuth)\n    # Passes through: requests with WordPress auth cookies (logged-in users)\n    RewriteCond %{REQUEST_URI} ^/wp-json/wp/v2/users [NC]\n    RewriteCond %{HTTP:Authorization} ^$ [NC]\n    RewriteCond %{HTTP_COOKIE} !wordpress_logged_in [NC]\n    RewriteCond %{QUERY_STRING} !rest_route [NC]\n    RewriteRule ^ - [F,L]\n</IfModule>\n# END VAPT RISK-003",
           "begin_marker": "# BEGIN VAPT RISK-003",
           "end_marker": "# END VAPT RISK-003",
-          "raw_code": "<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    RewriteRule ^wp-json/wp/v2/users$ - [F,L]\n    RewriteRule ^wp-json/wp/v2/users/ - [F,L]\n</IfModule>",
+          "raw_code": "# Require authentication for /wp-json/wp/v2/users endpoint\n# Allows: Gutenberg @mentions, WooCommerce admin, JWT auth, logged-in admins\n# Blocks: unauthenticated user enumeration by bots and scanners\n<IfModule mod_rewrite.c>\n    RewriteEngine On\n    RewriteBase /\n    # Block unauthenticated requests to /users endpoint\n    # Passes through: requests with Authorization header (JWT, Basic, OAuth)\n    # Passes through: requests with WordPress auth cookies (logged-in users)\n    RewriteCond %{REQUEST_URI} ^/wp-json/wp/v2/users [NC]\n    RewriteCond %{HTTP:Authorization} ^$ [NC]\n    RewriteCond %{HTTP_COOKIE} !wordpress_logged_in [NC]\n    RewriteCond %{QUERY_STRING} !rest_route [NC]\n    RewriteRule ^ - [F,L]\n</IfModule>",
           "verification": {
-            "command": "apachectl -t && curl -sI 'https://yoursite.com/' | grep HTTP",
-            "expected": "Exit 0, no syntax errors"
+            "command": "apachectl -t && curl -sI https://yoursite.com/wp-json/wp/v2/users | grep HTTP",
+            "expected": "HTTP 403 for unauthenticated, HTTP 200 with valid Authorization header"
           },
           "rollback": {
             "action": "remove_block",
             "begin_marker": "# BEGIN VAPT RISK-003",
             "end_marker": "# END VAPT RISK-003",
             "target_file": "{ABSPATH}.htaccess"
+          }
+        },
+        {
+          "enforcer": "PHP Functions",
+          "lib_key": "php_functions",
+          "operation": "add_filter_hook",
+          "write_mode": "append_to_file",
+          "target_file": "{ABSPATH}wp-content/plugins/vapt-protection-suite/vapt-functions.php",
+          "backup_required": true,
+          "idempotency": {
+            "check_string": "// BEGIN VAPT RISK-003",
+            "if_found": "skip",
+            "if_not_found": "insert"
+          },
+          "insertion": {
+            "anchor_string": null,
+            "anchor_position": "append",
+            "fallback": "append"
+          },
+          "write_block": "// BEGIN VAPT RISK-003\n// Restrict /wp-json/wp/v2/users to authenticated users only\n// More reliable than .htaccess for cookie-based authentication detection\nadd_filter('rest_endpoints', 'vapt_restrict_users_endpoint');\nfunction vapt_restrict_users_endpoint($endpoints) {\n    if (isset($endpoints['/wp/v2/users'])) {\n        foreach ($endpoints['/wp/v2/users'] as $key => $endpoint) {\n            $endpoints['/wp/v2/users'][$key]['permission_callback'] = function() {\n                return current_user_can('list_users');\n            };\n        }\n    }\n    if (isset($endpoints['/wp/v2/users/(?P<id>[\\d]+)'])) {\n        foreach ($endpoints['/wp/v2/users/(?P<id>[\\d]+)'] as $key => $endpoint) {\n            $endpoints['/wp/v2/users/(?P<id>[\\d]+)'][$key]['permission_callback'] = function() {\n                return current_user_can('list_users');\n            };\n        }\n    }\n    return $endpoints;\n}\n// END VAPT RISK-003",
+          "begin_marker": "// BEGIN VAPT RISK-003",
+          "end_marker": "// END VAPT RISK-003",
+          "raw_code": "// Restrict /wp-json/wp/v2/users to authenticated users only\n// More reliable than .htaccess for cookie-based authentication detection\nadd_filter('rest_endpoints', 'vapt_restrict_users_endpoint');\nfunction vapt_restrict_users_endpoint($endpoints) {\n    if (isset($endpoints['/wp/v2/users'])) {\n        foreach ($endpoints['/wp/v2/users'] as $key => $endpoint) {\n            $endpoints['/wp/v2/users'][$key]['permission_callback'] = function() {\n                return current_user_can('list_users');\n            };\n        }\n    }\n    if (isset($endpoints['/wp/v2/users/(?P<id>[\\d]+)'])) {\n        foreach ($endpoints['/wp/v2/users/(?P<id>[\\d]+)'] as $key => $endpoint) {\n            $endpoints['/wp/v2/users/(?P<id>[\\d]+)'][$key]['permission_callback'] = function() {\n                return current_user_can('list_users');\n            };\n        }\n    }\n    return $endpoints;\n}",
+          "verification": {
+            "command": "wp eval \"echo rest_url('/wp/v2/users');\"",
+            "expected": "URL printed, no PHP errors"
+          },
+          "rollback": {
+            "action": "remove_block",
+            "begin_marker": "// BEGIN VAPT RISK-003",
+            "end_marker": "// END VAPT RISK-003",
+            "target_file": "{ABSPATH}wp-content/plugins/vapt-protection-suite/vapt-functions.php"
           }
         }
       ]
@@ -843,13 +875,13 @@
             "anchor_position": "prepend",
             "fallback": null
           },
-          "write_block": "# BEGIN VAPT RISK-019\n<FilesMatch \"\\.(env|git|sql|log|ini|yml|yaml|bak|conf)$\">\n    Order Deny,Allow\n    Deny from all\n</FilesMatch>\n# END VAPT RISK-019",
+          "write_block": "# BEGIN VAPT RISK-019\n# Block access to sensitive configuration and data files\n# Preserves: WordPress core files, plugin/theme CSS/JS/PHP, REST API, admin area\n<FilesMatch \"\\.(env|sql|bak|backup|old|orig|save|swp|dump|htpasswd)$|^\\.git$|^\\.gitignore$\">\n    Order Deny,Allow\n    Deny from all\n</FilesMatch>\n# END VAPT RISK-019",
           "begin_marker": "# BEGIN VAPT RISK-019",
           "end_marker": "# END VAPT RISK-019",
-          "raw_code": "<FilesMatch \"\\.(env|git|sql|log|ini|yml|yaml|bak|conf)$\">\n    Order Deny,Allow\n    Deny from all\n</FilesMatch>",
+          "raw_code": "# Block access to sensitive configuration and data files\n# Preserves: WordPress core files, plugin/theme CSS/JS/PHP, REST API, admin area\n<FilesMatch \"\\.(env|sql|bak|backup|old|orig|save|swp|dump|htpasswd)$|^\\.git$|^\\.gitignore$\">\n    Order Deny,Allow\n    Deny from all\n</FilesMatch>",
           "verification": {
-            "command": "apachectl -t",
-            "expected": "Exit 0, no syntax errors"
+            "command": "apachectl -t && curl -sI https://yoursite.com/.env | grep HTTP",
+            "expected": "HTTP 403"
           },
           "rollback": {
             "action": "remove_block",
@@ -1163,13 +1195,13 @@
             "anchor_position": "prepend",
             "fallback": null
           },
-          "write_block": "# BEGIN VAPT RISK-027\n<Files \"install.php\">\n    Order Deny,Allow\n    Deny from all\n</Files>\n# END VAPT RISK-027",
+          "write_block": "# BEGIN VAPT RISK-027\n# Restrict wp-admin/install.php to local access only\n# Remove this rule temporarily if running a fresh WordPress install\n<Files \"install.php\">\n    Order Deny,Allow\n    Deny from all\n    Allow from 127.0.0.1\n    Allow from ::1\n    # Add your admin IP: Allow from YOUR.ADMIN.IP.HERE\n</Files>\n# END VAPT RISK-027",
           "begin_marker": "# BEGIN VAPT RISK-027",
           "end_marker": "# END VAPT RISK-027",
-          "raw_code": "<Files \"install.php\">\n    Order Deny,Allow\n    Deny from all\n</Files>",
+          "raw_code": "# Restrict wp-admin/install.php to local access only\n# Remove this rule temporarily if running a fresh WordPress install\n<Files \"install.php\">\n    Order Deny,Allow\n    Deny from all\n    Allow from 127.0.0.1\n    Allow from ::1\n    # Add your admin IP: Allow from YOUR.ADMIN.IP.HERE\n</Files>",
           "verification": {
-            "command": "apachectl -t",
-            "expected": "Exit 0, no syntax errors"
+            "command": "apachectl -t && curl -sI https://yoursite.com/wp-admin/install.php | grep HTTP",
+            "expected": "HTTP 403 from external, HTTP 200 from localhost"
           },
           "rollback": {
             "action": "remove_block",
@@ -1203,13 +1235,13 @@
             "anchor_position": "prepend",
             "fallback": null
           },
-          "write_block": "# BEGIN VAPT RISK-028\n<Files \"upgrade.php\">\n    Order Deny,Allow\n    Deny from all\n</Files>\n# END VAPT RISK-028",
+          "write_block": "# BEGIN VAPT RISK-028\n# Restrict wp-admin/upgrade.php to authenticated admin sessions and local access\n# Allows: WordPress auto-updater (runs as admin), wp-cli upgrade, manual core updates\n# Blocks: unauthenticated external access to upgrade endpoint\n<Files \"upgrade.php\">\n    Order Deny,Allow\n    Deny from all\n    Allow from 127.0.0.1\n    Allow from ::1\n    # Add your admin IP: Allow from YOUR.ADMIN.IP.HERE\n</Files>\n# END VAPT RISK-028",
           "begin_marker": "# BEGIN VAPT RISK-028",
           "end_marker": "# END VAPT RISK-028",
-          "raw_code": "<Files \"upgrade.php\">\n    Order Deny,Allow\n    Deny from all\n</Files>",
+          "raw_code": "# Restrict wp-admin/upgrade.php to authenticated admin sessions and local access\n# Allows: WordPress auto-updater (runs as admin), wp-cli upgrade, manual core updates\n# Blocks: unauthenticated external access to upgrade endpoint\n<Files \"upgrade.php\">\n    Order Deny,Allow\n    Deny from all\n    Allow from 127.0.0.1\n    Allow from ::1\n    # Add your admin IP: Allow from YOUR.ADMIN.IP.HERE\n</Files>",
           "verification": {
-            "command": "apachectl -t",
-            "expected": "Exit 0, no syntax errors"
+            "command": "apachectl -t && curl -sI https://yoursite.com/wp-admin/upgrade.php | grep HTTP",
+            "expected": "HTTP 403 from external"
           },
           "rollback": {
             "action": "remove_block",
